@@ -5,4 +5,7 @@ export * from "./phase.js";
 export * from "./dimension.js";
 export * from "./vector.js";
 export * from "./projection.js";
+export * from "./weights.js";
+export * from "./comparison.js";
 export * from "./cube.js";
+export * from "./cube-comparison.js";
