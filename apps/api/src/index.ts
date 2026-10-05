@@ -1,20 +1,19 @@
-import express from "express";
-import cors from "cors";
+import { createApp } from './app.js';
+import { readConfig } from './config.js';
 
-const app = express();
-
-app.use(cors());
-app.use(express.json());
-
-app.get("/health", (_req, res) => {
-  res.json({
-    ok: true,
-    service: "choisys-api"
+try {
+  const config = readConfig();
+  const server = createApp(config).listen(config.port, config.host, () => {
+    console.log(`choisys-api listening on http://${config.host}:${config.port}`);
   });
-});
-
-const PORT = 3000;
-
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(Scenarys API running on http://0.0.0.0:);
-});
+  server.requestTimeout = 10_000;
+  server.headersTimeout = 10_000;
+  server.keepAliveTimeout = 5_000;
+  server.on('error', () => {
+    console.error('choisys-api could not listen on the configured address.');
+    process.exitCode = 1;
+  });
+} catch {
+  console.error('choisys-api configuration invalid: check local token, host, port and origins.');
+  process.exitCode = 1;
+}

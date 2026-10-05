@@ -1,11 +1,3 @@
-export * from "./types.js";
-export * from "./position.js";
-export * from "./line.js";
-export * from "./phase.js";
-export * from "./dimension.js";
-export * from "./vector.js";
-export * from "./projection.js";
-export * from "./weights.js";
-export * from "./comparison.js";
-export * from "./cube.js";
-export * from "./cube-comparison.js";
+// Reserved workspace. The engine executes only in the private local C++ service.
+// Public input/output types live in @scenarys/shared.
+export {};

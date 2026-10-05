@@ -6,3 +6,15 @@ build/
 .expo/
 coverage/
 *.log
+*.key
+*.pem
+secrets/
+local-config/
+*.exe
+*.dll
+*.obj
+*.o
+*.a
+# Local engine and snapshots must remain outside this public repository.
+neo-cube/
+backups/

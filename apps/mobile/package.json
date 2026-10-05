@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "index.ts",
   "dependencies": {
+    "@scenarys/shared": "0.1.0",
     "expo": "~57.0.26",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
@@ -10,13 +11,18 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "tsx": "^4.20.0",
     "typescript": "~6.0.3"
   },
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "check": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test tests/productFlow.test.ts",
+    "lint": "expo lint"
   },
   "private": true
 }
