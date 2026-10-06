@@ -96,5 +96,41 @@ Varios agentes pueden trabajar a la vez. Git es el canal de coordinación:
   propio PR sin el visto bueno del dueño.
 - **Archivos propensos a conflicto:** `package.json`, `package-lock.json`, `AGENTS.md` y `README.md`. Anuncia en
   el PR si los tocas y evita cambiar dependencias a la vez que otro agente.
-- **Si hay conflicto:** haz `rebase` de tu rama sobre `main`; no resuelvas a ciegas los cambios del otro agente
-  y pregunta al dueño si el conflicto afecta a decisiones de producto.
+- **Si hay conflicto:** integra `main` en tu rama (`git merge origin/main`; el rebase solo si tu rama aún no está
+  subida, porque no se hace `push --force`). No resuelvas a ciegas los cambios del otro agente y pregunta al
+  dueño si el conflicto afecta a decisiones de producto.
+
+### Sincronizar con main (obligatorio)
+
+**Antes de cada implementación, y otra vez antes de abrir el PR**, integra `main` en tu rama:
+
+```powershell
+node scripts/sync-main.mjs            # integra main, cuenta qué PRs te faltan y se detiene si hay conflicto
+node scripts/sync-main.mjs --dry-run  # solo informa
+```
+
+Se detiene sin tocar nada si tienes cambios sin commitear o si hay conflictos. Nunca fuerces el push.
+
+### Cuando el dueño fusiona un PR
+
+No esperes a que te lo digan: el dueño fusiona en GitHub y los agentes siguen trabajando.
+
+- **Claude:** vigila `main` con `node scripts/watch-main.mjs` (una línea por PR fusionado). Al verla,
+  ejecuta `node scripts/sync-main.mjs` y reanuda; si tu tarea dependía de ese PR, continúa sin pedir permiso.
+- **Codex:** ejecuta `node scripts/sync-main.mjs` al empezar cada tarea y antes de abrir el PR. Si el dueño
+  tiene `watch-main.mjs` en una terminal, verá cuándo avisarte.
+- **Dependencias entre PRs:** si tu PR depende de otro aún sin fusionar, dilo en la primera línea del PR
+  (`Depende de #N`) y parte de esa rama; cuando se fusione, sincroniza con `main`.
+
+### Resumen para el dueño (cada PR)
+
+El dueño tiene poco tiempo y lee poco. **Todo PR empieza** con una sección corta, en español y sin jerga:
+
+```markdown
+## Para el dueño
+Qué cambia, en una frase.
+Qué decides tú (o "nada").
+```
+
+Y debe incluir `No verificado: …` si algo no se pudo comprobar. `node scripts/merge-digest.mjs` convierte las
+últimas fusiones en una lista corta (qué es, tamaño, qué falta por verificar) a partir de esas secciones.
