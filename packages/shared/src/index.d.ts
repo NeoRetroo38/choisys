@@ -22,6 +22,11 @@ export interface EvaluateRequest {
 }
 /** One selection already stored by the engine; 1-based. Drawn by clients, never derived by them. */
 export interface Measurement { phase: Phase; row: 1 | 2 | 3; column: 1 | 2 | 3 }
+export interface PhaseTransitionTiming {
+  fromPhase: 1 | 2;
+  toPhase: 2 | 3;
+  durationMs: number;
+}
 export interface EvaluateResponse {
   ok: true;
   result: {
@@ -29,6 +34,8 @@ export interface EvaluateResponse {
     phase: Phase;
     status: 'phase-complete' | 'completed';
     nextPhase: 2 | 3 | null;
+    /** Observable time from completing one phase until submitting the next. Added by the product API. */
+    phaseTransitions?: PhaseTransitionTiming[];
     /** Present only when status is 'completed'. */
     measurements?: Measurement[];
   };

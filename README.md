@@ -175,7 +175,10 @@ La app solo lo dibuja (`CubeView`, `react-native-svg`) y conserva en el disposit
 no calcula coordenadas, centroides, pesos ni inferencia. Las fases 1 y 2 no lo incluyen.
 
 Resultado: `{ "ok": true, "result": { "sessionId": "<UUID>", "phase": 1,
-"status": "phase-complete", "nextPhase": 2 } }`. Al terminar, `status` es
+"status": "phase-complete", "nextPhase": 2, "phaseTransitions": [] } }`. Desde la
+fase 2, `phaseTransitions` acumula el tiempo observable en milisegundos desde que se
+completa una fase hasta que se envía la siguiente, por ejemplo
+`{ "fromPhase": 1, "toPhase": 2, "durationMs": 1250 }`. Al terminar, `status` es
 `completed` y `nextPhase` es `null`. No incluye datos internos del motor.
 
 C++ privado: `GET /health` y `POST /evaluate`, ambos con

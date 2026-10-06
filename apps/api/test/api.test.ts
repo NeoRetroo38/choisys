@@ -122,12 +122,32 @@ test('sessions enforce expiry, capacity, unknown identity and concurrent lock', 
   const pending = sessions.evaluate(request);
   await rejectsCode(sessions.evaluate(request), 409, 'SESSION_BUSY');
   finish(success(request));
-  assert.deepEqual(await pending, success(request));
+  assert.deepEqual(await pending, { ...success(request), result: { ...success(request).result, phaseTransitions: [] } });
   for (let i = 1; i < 256; i++) sessions.start({ scenarioId: 'choice-grid' });
   assert.throws(() => sessions.start({ scenarioId: 'choice-grid' }), { code: 'SESSION_LIMIT_REACHED' });
   now = 30 * 60 * 1000;
   await rejectsCode(sessions.evaluate(request), 404, 'SESSION_NOT_FOUND');
   assert.equal(sessions.start({ scenarioId: 'choice-grid' }).session.phase, 1);
+});
+
+test('sessions measure each successful phase transition and enforce phase order', async () => {
+  let now = 1000;
+  const sessions = new SessionService({ evaluate: async request => success(request) }, () => now);
+  const sessionId = sessions.start({ scenarioId: 'choice-grid' }).session.sessionId;
+  const phase = (value: 1 | 2 | 3): EvaluateRequest => ({ ...input, sessionId, phase: value });
+
+  assert.deepEqual((await sessions.evaluate(phase(1))).result.phaseTransitions, []);
+  now = 2250;
+  assert.deepEqual((await sessions.evaluate(phase(2))).result.phaseTransitions, [
+    { fromPhase: 1, toPhase: 2, durationMs: 1250 },
+  ]);
+  now = 3000;
+  assert.deepEqual((await sessions.evaluate(phase(3))).result.phaseTransitions, [
+    { fromPhase: 1, toPhase: 2, durationMs: 1250 },
+    { fromPhase: 2, toPhase: 3, durationMs: 750 },
+  ]);
+  await rejectsCode(sessions.evaluate(phase(2)), 409, 'SESSION_CONFLICT');
+  await rejectsCode(sessions.evaluate(phase(3)), 409, 'SESSION_CONFLICT');
 });
 
 test('configuration rejects missing token, wildcard/public binds, wildcard origin and unbounded timeout', () => {
@@ -157,7 +177,10 @@ test('HTTP flow creates sessions, validates bodies/CORS and keeps token out of r
     assert.equal(response.status, 200);
     const body = await response.text();
     assert.equal(body.includes(testCredential), false);
-    assert.deepEqual(JSON.parse(body), success({ ...input, sessionId: session.sessionId, phase }));
+    const parsed = JSON.parse(body);
+    assert.deepEqual(parsed.result.phaseTransitions.map((timing: { fromPhase: number; toPhase: number }) => ({ fromPhase: timing.fromPhase, toPhase: timing.toPhase })),
+      phase === 1 ? [] : phase === 2 ? [{ fromPhase: 1, toPhase: 2 }] : [{ fromPhase: 1, toPhase: 2 }, { fromPhase: 2, toPhase: 3 }]);
+    assert.equal(parsed.result.phaseTransitions.every((timing: { durationMs: number }) => Number.isSafeInteger(timing.durationMs) && timing.durationMs >= 0), true);
   }
   assert.equal(calls.length, 3);
   assert.equal((await post('/evaluate', input)).status, 404);
