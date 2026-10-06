@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { Animated, Platform, Pressable, StyleSheet } from 'react-native';
 
 interface PopCircleProps {
@@ -15,8 +15,8 @@ const native = Platform.OS !== 'web';
 
 /** Phase button: springs in on mount and pops on press. One tap selects and sends. */
 export default function PopCircle({ size, delay, selected, disabled, label, onPress }: PopCircleProps) {
-  const entrance = useRef(new Animated.Value(0)).current;
-  const press = useRef(new Animated.Value(1)).current;
+  const [entrance] = useState(() => new Animated.Value(0));
+  const [press] = useState(() => new Animated.Value(1));
 
   useEffect(() => {
     Animated.sequence([

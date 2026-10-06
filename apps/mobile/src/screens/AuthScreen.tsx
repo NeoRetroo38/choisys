@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView,
   StyleSheet, Text, TextInput, View, useWindowDimensions,
@@ -24,10 +24,13 @@ export default function AuthScreen({ mode, busy, error, onSubmit, onModeChange }
   const passwordInput = useRef<TextInput>(null);
   const register = mode === 'register';
 
-  useEffect(() => {
+  // Switching between login and register clears the password and any validation message.
+  const [shownMode, setShownMode] = useState(mode);
+  if (shownMode !== mode) {
+    setShownMode(mode);
     setPassword('');
     setValidationError(null);
-  }, [mode]);
+  }
 
   function submit() {
     if (busy) return;

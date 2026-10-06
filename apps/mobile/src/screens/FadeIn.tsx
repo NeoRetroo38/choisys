@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Animated, Easing, Platform, type StyleProp, type ViewStyle } from 'react-native';
 
 interface FadeInProps {
@@ -13,7 +13,7 @@ const native = Platform.OS !== 'web';
 
 /** Screen transition: fade and rise on mount. Remount with a `key` to replay it. */
 export default function FadeIn({ children, style, duration = 340, offset = 14 }: FadeInProps) {
-  const progress = useRef(new Animated.Value(0)).current;
+  const [progress] = useState(() => new Animated.Value(0));
   useEffect(() => {
     Animated.timing(progress, { toValue: 1, duration, easing: Easing.out(Easing.cubic), useNativeDriver: native }).start();
   }, [duration, progress]);
