@@ -6,6 +6,7 @@ import { createProductClient, isAuthenticationError, toUiError } from '../produc
 import { initialState, sessionReducer } from '../sessionState';
 import { appendRun, parseHistory, type RunMeasurements } from '../history/runHistory';
 import { historyStorage } from '../history/historyStorage';
+import { playSound } from '../sound';
 import CubeView from './CubeView';
 import FadeIn from './FadeIn';
 import PopCircle from './PopCircle';
@@ -45,11 +46,13 @@ export default function ExperienceScreen({ client, onSignOut, onUnauthorized }: 
       onUnauthorized();
       return;
     }
+    playSound('error');
     dispatch({ type: 'failed', error: toUiError(error) });
   }
 
   async function start() {
     if (inFlight.current) return;
+    playSound('tap');
     inFlight.current = true;
     dispatch({ type: 'starting' });
     try {
@@ -71,6 +74,7 @@ export default function ExperienceScreen({ client, onSignOut, onUnauthorized }: 
       if (response.result.measurements) remember(response.result.measurements);
       // Let the pop finish before the next phase fades in.
       await new Promise(resolve => setTimeout(resolve, 260));
+      playSound(response.result.status === 'completed' ? 'complete' : 'phase');
       dispatch({ type: 'received', result: response.result });
     } catch (error) {
       fail(error);
@@ -82,6 +86,7 @@ export default function ExperienceScreen({ client, onSignOut, onUnauthorized }: 
   /** One tap selects and sends; no confirmation step. */
   function choose(position: Position) {
     if (inFlight.current || !state.sessionId || state.busy || state.pending || state.error?.restart) return;
+    playSound('tap');
     dispatch({ type: 'selected', position });
     void send({
       scenarioId: 'choice-grid', sessionId: state.sessionId, phase: state.phase,
@@ -103,7 +108,7 @@ export default function ExperienceScreen({ client, onSignOut, onUnauthorized }: 
     );
   }
 
-  const viewCube = history.length > 0 && <Pressable accessibilityRole="button" onPress={() => setShowCube(true)}
+  const viewCube = history.length > 0 && <Pressable accessibilityRole="button" onPress={() => { playSound('cube'); setShowCube(true); }}
     style={({ pressed }) => [styles.back, pressed && styles.pressed]}>
     <Text style={styles.secondaryText}>Ver mi cubo</Text>
   </Pressable>;
