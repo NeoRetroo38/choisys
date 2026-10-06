@@ -27,13 +27,17 @@ function makeProjector(yaw: number, pitch: number, scale: number, center: number
   };
 }
 
-// Gridded cube: 4 x 4 x 4 cubicles (5 grid lines per axis). The 27 possible decisions (row, column,
-// phase) sit exactly on the inner vertices -1, 0, 1; the outer layer of cells is the padding between
-// the decisions and the cube's walls. Only edges are drawn.
-const walls = [-2, -1, 0, 1, 2];
-const edges: Array<[Vec, Vec]> = [];
-for (const a of walls) for (const b of walls) {
-  edges.push([[-2, a, b], [2, a, b]], [[a, -2, b], [a, 2, b]], [[a, b, -2], [a, b, 2]]);
+// Two separate elements, drawn only as edges:
+// - the outer cube: a plain box at +/-2 that frames the whole view;
+// - the decision grid: a 2 x 2 x 2 lattice whose 27 vertices (-1, 0, 1) are exactly the possible
+//   decisions (row, column, phase). One cell of padding separates it from the outer cube.
+const outerEdges: Array<[Vec, Vec]> = [];
+for (const a of [-2, 2]) for (const b of [-2, 2]) {
+  outerEdges.push([[-2, a, b], [2, a, b]], [[a, -2, b], [a, 2, b]], [[a, b, -2], [a, b, 2]]);
+}
+const gridEdges: Array<[Vec, Vec]> = [];
+for (const a of [-1, 0, 1]) for (const b of [-1, 0, 1]) {
+  gridEdges.push([[-1, a, b], [1, a, b]], [[a, -1, b], [a, 1, b]], [[a, b, -1], [a, b, 1]]);
 }
 
 // Axes cross at the origin (0,0,0), the pivot of the rotation. z is the phase axis, 1 → 3.
@@ -84,10 +88,15 @@ export default function CubeView({ runs, size }: CubeViewProps) {
       <View accessible accessibilityLabel={`Cubo con ${runs.length} ${runs.length === 1 ? 'intento' : 'intentos'} recientes. Arrastra para rotarlo.`}
         {...pan.panHandlers} style={Platform.OS === 'web' ? ({ cursor: 'grab', touchAction: 'none', userSelect: 'none' } as object) : undefined}>
         <Svg width={size} height={size}>
-          {edges.map(([from, to], index) => {
+          {outerEdges.map(([from, to], index) => {
             const [x1, y1] = project(from);
             const [x2, y2] = project(to);
-            return <Line key={index} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#ffffff" strokeOpacity={0.3} strokeWidth={1} />;
+            return <Line key={`o${index}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#ffffff" strokeOpacity={0.4} strokeWidth={1.4} />;
+          })}
+          {gridEdges.map(([from, to], index) => {
+            const [x1, y1] = project(from);
+            const [x2, y2] = project(to);
+            return <Line key={`g${index}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#ffffff" strokeOpacity={0.55} strokeWidth={0.9} />;
           })}
 
           {axes.map(axis => {
