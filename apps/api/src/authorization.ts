@@ -9,11 +9,13 @@ export interface AuthActor {
 export interface ProfileScope { id: string; role: Role }
 export interface CubeDataScope { profileId: string; profileRole: Role }
 
-const rank: Record<Role, number> = { USER: 0, ADMIN: 1, DEV: 2, SUPERDEV: 3 };
+const rank: Record<Role, number> = { USER: 0, ADMIN: 1, DEV: 2, SUPERADMIN: 3, SUPERDEV: 4 };
 
 export function canReadProfile(actor: AuthActor, target: ProfileScope): boolean {
   if (actor.profileId === target.id || actor.role === 'SUPERDEV') return true;
   if (actor.role === 'DEV') return target.role !== 'SUPERDEV';
+  // SUPERADMIN is reserved: deny by default, allow only strictly lower roles.
+  if (actor.role === 'SUPERADMIN') return rank[target.role] < rank.SUPERADMIN;
   return actor.role === 'ADMIN' && target.role === 'USER';
 }
 

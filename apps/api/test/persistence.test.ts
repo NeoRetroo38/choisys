@@ -10,7 +10,7 @@ import { assertSafeJson, CubeDataService } from '../src/services/cubeDataService
 
 const actor = (role: AuthActor['role'], profileId = role.toLowerCase()): AuthActor => ({ role, profileId });
 
-test('central authorization follows the USER < ADMIN < DEV < SUPERDEV hierarchy', () => {
+test('central authorization follows the USER < ADMIN < DEV < SUPERADMIN < SUPERDEV hierarchy', () => {
   const user = actor('USER');
   const admin = actor('ADMIN');
   const dev = actor('DEV');
@@ -30,6 +30,18 @@ test('central authorization follows the USER < ADMIN < DEV < SUPERDEV hierarchy'
   assert.equal(canAccessTechnicalData(dev), true);
   assert.equal(canManageSystem(dev), false);
   assert.equal(canManageSystem(superdev), true);
+  // SUPERADMIN sits between DEV and SUPERDEV and is deny-by-default for now.
+  const superadmin = actor('SUPERADMIN');
+  assert.equal(canManageProfile(superadmin, { id: 'other', role: 'DEV' }), true);
+  assert.equal(canManageProfile(superadmin, { id: 'other', role: 'SUPERADMIN' }), false);
+  assert.equal(canManageProfile(dev, { id: 'other', role: 'SUPERADMIN' }), false);
+  assert.equal(canAssignRole(superdev, 'SUPERADMIN'), true);
+  assert.equal(canAssignRole(superadmin, 'SUPERADMIN'), false);
+  assert.equal(canReadProfile(superadmin, { id: 'other', role: 'DEV' }), true);
+  assert.equal(canReadProfile(superadmin, { id: 'other', role: 'SUPERDEV' }), false);
+  assert.equal(canReadProfile(superdev, { id: 'other', role: 'SUPERADMIN' }), true);
+  assert.equal(canAccessTechnicalData(superadmin), false);
+  assert.equal(canManageSystem(superadmin), false);
 });
 
 test('persistence boundary accepts result JSON and rejects private engine material', () => {

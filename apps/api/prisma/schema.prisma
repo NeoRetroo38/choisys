@@ -7,10 +7,13 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/// Declared in ascending privilege order: USER < ADMIN < DEV < SUPERADMIN < SUPERDEV.
+/// Only USER and SUPERDEV have dedicated capabilities for now; the others inherit USER's.
 enum Role {
   USER
   ADMIN
   DEV
+  SUPERADMIN
   SUPERDEV
 }
 
@@ -28,13 +31,13 @@ enum CubeDataStatus {
 }
 
 model Account {
-  id           String    @id @default(uuid()) @db.Uuid
-  email        String    @unique @db.VarChar(320)
-  passwordHash String    @map("password_hash") @db.VarChar(512)
-  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
-  lastLoginAt  DateTime? @map("last_login_at") @db.Timestamptz(3)
-  isActive     Boolean   @default(true) @map("is_active")
+  id           String           @id @default(uuid()) @db.Uuid
+  email        String           @unique @db.VarChar(320)
+  passwordHash String           @map("password_hash") @db.VarChar(512)
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  lastLoginAt  DateTime?        @map("last_login_at") @db.Timestamptz(3)
+  isActive     Boolean          @default(true) @map("is_active")
   profile      Profile?
   sessions     AccountSession[]
 
@@ -57,14 +60,16 @@ model AccountSession {
 }
 
 model Profile {
-  id          String     @id @default(uuid()) @db.Uuid
-  accountId   String     @unique @map("account_id") @db.Uuid
-  role        Role       @default(USER)
-  displayName String     @map("display_name") @db.VarChar(120)
-  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt   DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
-  account     Account    @relation(fields: [accountId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  cubeData    CubeData[]
+  id                  String       @id @default(uuid()) @db.Uuid
+  accountId           String       @unique @map("account_id") @db.Uuid
+  role                Role         @default(USER)
+  displayName         String       @map("display_name") @db.VarChar(120)
+  createdAt           DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  account             Account      @relation(fields: [accountId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  cubeData            CubeData[]
+  roleChangesReceived RoleChange[] @relation("RoleChangeTarget")
+  roleChangesMade     RoleChange[] @relation("RoleChangeActor")
 
   @@index([role])
   @@map("profiles")
@@ -98,4 +103,48 @@ model CubeData {
   @@index([createdAt])
   @@index([profileId, createdAt])
   @@map("cube_data")
+}
+
+/// A capability the backend can check, e.g. "role.assign". Keys are fixed identifiers defined in
+/// src/permissions.ts and never come from a client.
+model Permission {
+  id          String           @id @default(uuid()) @db.Uuid
+  key         String           @unique @db.VarChar(64)
+  description String           @db.VarChar(240)
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  roles       RolePermission[]
+
+  @@map("permissions")
+}
+
+/// Direct grants of a permission to a role. Rows are explicit (no runtime inheritance), so what a
+/// role can do is readable straight from this table.
+model RolePermission {
+  role         Role
+  permissionId String     @map("permission_id") @db.Uuid
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@id([role, permissionId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+/// Append-only audit of role assignments. Profile links become NULL if a profile is deleted, so the
+/// history survives account deletion. A NULL actor marks the local one-time SUPERDEV bootstrap.
+model RoleChange {
+  id              String   @id @default(uuid()) @db.Uuid
+  targetProfileId String?  @map("target_profile_id") @db.Uuid
+  actorProfileId  String?  @map("actor_profile_id") @db.Uuid
+  fromRole        Role?    @map("from_role")
+  toRole          Role     @map("to_role")
+  reason          String?  @db.VarChar(240)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  target          Profile? @relation("RoleChangeTarget", fields: [targetProfileId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  actor           Profile? @relation("RoleChangeActor", fields: [actorProfileId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([targetProfileId, createdAt])
+  @@index([actorProfileId])
+  @@index([createdAt])
+  @@map("role_changes")
 }

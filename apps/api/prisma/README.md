@@ -14,11 +14,15 @@ su política de backup. No usar `db push` para sustituir ese proceso.
 
 ## Tablas
 
-El schema contiene exactamente tres modelos persistentes:
+El schema contiene estos modelos persistentes:
 
 - `accounts`: identidad, hash de contraseña y estado de la cuenta.
+- `account_sessions`: sesiones de login revocables (solo se guarda el hash del token).
 - `profiles`: perfil operativo y rol. `account_id` es único.
 - `cube_data`: registros `RUN` y `SESSION`, propiedad de un perfil.
+- `permissions`: catálogo de capacidades (`role.assign`, `cube_data.read.own`...).
+- `role_permissions`: qué permisos tiene cada rol, con filas explícitas.
+- `role_changes`: auditoría de asignaciones de rol, solo de inserción.
 
 Los nombres de modelos y campos permanecen en PascalCase/camelCase en TypeScript;
 `@@map` y `@map` producen los nombres PostgreSQL `accounts`, `profiles`,
@@ -39,13 +43,37 @@ uso; nunca un valor aceptado desde el cliente.
 
 ## Enums
 
-- `Role`: `USER`, `ADMIN`, `DEV`, `SUPERDEV`.
+- `Role`: `USER`, `ADMIN`, `DEV`, `SUPERADMIN`, `SUPERDEV`, en orden ascendente de privilegio.
 - `CubeDataType`: `SESSION`, `RUN`.
 - `CubeDataStatus`: `CREATED`, `ACTIVE`, `COMPLETED`, `INTERRUPTED`, `FAILED`.
 
 La autorización vive en `src/authorization.ts`. El `AuthActor` debe construirse
 con identidad autenticada por backend. Nunca debe poblarse con `profileId` o
 `role` recibidos del cliente.
+
+## Roles y permisos
+
+Jerarquía: `USER < ADMIN < DEV < SUPERADMIN < SUPERDEV`. Por ahora solo se definen
+capacidades propias para `USER` y `SUPERDEV`; `ADMIN`, `DEV` y `SUPERADMIN` quedan
+reservados y tienen exactamente lo que tiene `USER`. La fuente de verdad del
+catálogo y de las concesiones está en `src/permissions.ts`; cuando exista la base,
+un seed la volcará a `permissions` y `role_permissions`.
+
+| Permiso | USER | SUPERDEV |
+|---|---|---|
+| `profile.read.own`, `profile.update.own` | sí | sí |
+| `cube_data.read.own`, `cube_data.create.own`, `cube_data.export.own` | sí | sí |
+| `account.delete.own` | sí | sí |
+| `profile.read.any`, `cube_data.read.any` | no | sí |
+| `cube_data.read.technical` | no | sí |
+| `account.disable`, `role.assign`, `role_changes.read`, `system.manage` | no | sí |
+
+`role_changes` registra quién cambió qué rol y cuándo. Un actor nulo marca el
+bootstrap local del primer `SUPERDEV`. Los enlaces a perfiles pasan a `NULL` si el
+perfil se borra, de modo que el historial sobrevive al borrado de la cuenta.
+
+Este modelo no cambia la autorización en ejecución: `src/authorization.ts` sigue
+decidiendo por rango. `SUPERADMIN` solo puede leer y gestionar roles inferiores.
 
 ## Preparación y comprobación
 
@@ -71,6 +99,14 @@ PostgreSQL para reforzar los invariantes que Prisma no representa en el schema:
 - `phase_index IS NULL OR phase_index >= 0`;
 - un `RUN` tiene `run_id`, `session_index` y `phase_index` nulos;
 - una `SESSION` tiene esos tres campos definidos y `run_id <> id`.
+
+Pendientes del modelo de roles, tampoco representables en Prisma:
+
+- `role_changes` solo de inserción: revocar `UPDATE` y `DELETE` al rol de aplicación o
+  añadir un trigger que los rechace;
+- decidir si debe existir un único `SUPERDEV`: sería un índice único parcial,
+  `CREATE UNIQUE INDEX ON profiles (role) WHERE role = 'SUPERDEV'`;
+- el seed que carga `src/permissions.ts` en `permissions` y `role_permissions`.
 
 La capa de servicio ya valida los índices y construye las relaciones correctas.
 Los checks de base de datos quedan pendientes de la primera migración revisada.
