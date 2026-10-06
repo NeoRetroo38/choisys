@@ -146,8 +146,39 @@ test('sessions measure each successful phase transition and enforce phase order'
     { fromPhase: 1, toPhase: 2, durationMs: 1250 },
     { fromPhase: 2, toPhase: 3, durationMs: 750 },
   ]);
-  await rejectsCode(sessions.evaluate(phase(2)), 409, 'SESSION_CONFLICT');
-  await rejectsCode(sessions.evaluate(phase(3)), 409, 'SESSION_CONFLICT');
+  // Skipping ahead is refused by the API.
+  const skipping = new SessionService({ evaluate: async request => success(request) }, () => now);
+  const skipId = skipping.start({ scenarioId: 'choice-grid' }).session.sessionId;
+  await rejectsCode(skipping.evaluate({ ...input, sessionId: skipId, phase: 2 }), 409, 'SESSION_CONFLICT');
+  await rejectsCode(skipping.evaluate({ ...input, sessionId: skipId, phase: 3 }), 409, 'SESSION_CONFLICT');
+});
+
+test('retrying an already accepted phase is idempotent and records no new transition', async () => {
+  let now = 1000;
+  const calls: number[] = [];
+  const sessions = new SessionService({ evaluate: async request => { calls.push(request.phase); return success(request); } }, () => now);
+  const sessionId = sessions.start({ scenarioId: 'choice-grid' }).session.sessionId;
+  const phase = (value: 1 | 2 | 3): EvaluateRequest => ({ ...input, sessionId, phase: value });
+
+  const first = await sessions.evaluate(phase(1));
+  now = 2250;
+  const second = await sessions.evaluate(phase(2));
+  // The response to phase 2 was "lost": the client resends it, and must get the same answer.
+  now = 9000;
+  assert.deepEqual(await sessions.evaluate(phase(2)), second);
+  // An earlier phase can also be replayed and sees only the transitions that existed then.
+  assert.deepEqual(await sessions.evaluate(phase(1)), first);
+  assert.deepEqual(first.result.phaseTransitions, []);
+  assert.deepEqual(second.result.phaseTransitions, [{ fromPhase: 1, toPhase: 2, durationMs: 1250 }]);
+
+  now = 10_000;
+  const last = await sessions.evaluate(phase(3));
+  assert.equal(last.result.phaseTransitions?.length, 2);
+  // After completion every accepted phase can still be replayed, and no transition is added.
+  now = 20_000;
+  assert.deepEqual(await sessions.evaluate(phase(3)), last);
+  assert.deepEqual(await sessions.evaluate(phase(2)), second);
+  assert.deepEqual(calls, [1, 2, 2, 1, 3, 3, 2], 'every retry reaches the engine, which owns idempotency');
 });
 
 test('configuration rejects missing token, wildcard/public binds, wildcard origin and unbounded timeout', () => {

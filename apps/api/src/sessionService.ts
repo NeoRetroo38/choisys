@@ -28,20 +28,26 @@ export class SessionService {
     const session = this.sessions.get(input.sessionId);
     if (!session || session.profileId !== profileId || session.expiresAt <= this.now()) throw new ApiError(404, 'SESSION_NOT_FOUND');
     if (session.busy) throw new ApiError(409, 'SESSION_BUSY');
-    if (session.completed || input.phase !== session.expectedPhase) throw new ApiError(409, 'SESSION_CONFLICT');
+    // A phase the engine already accepted is a retry: let it through so the engine replays the same answer
+    // (or answers 409 if the choice changed). Only skipping ahead of the expected phase is refused here.
+    const replay = input.phase < session.expectedPhase || (session.completed && input.phase === session.expectedPhase);
+    if (!replay && input.phase !== session.expectedPhase) throw new ApiError(409, 'SESSION_CONFLICT');
     const submittedAt = this.now();
-    const transition = input.phase > 1 && session.phaseReadyAt !== undefined
+    const transition = !replay && input.phase > 1 && session.phaseReadyAt !== undefined
       ? { fromPhase: (input.phase - 1) as 1 | 2, toPhase: input.phase as 2 | 3, durationMs: Math.max(0, Math.round(submittedAt - session.phaseReadyAt)) }
       : undefined;
     session.busy = true;
     try {
       const response = await this.cube.evaluate(input);
-      if (transition) session.phaseTransitions.push(transition);
-      if (response.result.nextPhase) {
-        session.expectedPhase = response.result.nextPhase;
-        session.phaseReadyAt = this.now();
-      } else session.completed = true;
-      return { ok: true, result: { ...response.result, phaseTransitions: [...session.phaseTransitions] } };
+      if (!replay) {
+        if (transition) session.phaseTransitions.push(transition);
+        if (response.result.nextPhase) {
+          session.expectedPhase = response.result.nextPhase;
+          session.phaseReadyAt = this.now();
+        } else session.completed = true;
+      }
+      // A retry of phase N sees exactly the transitions that existed when phase N was first accepted.
+      return { ok: true, result: { ...response.result, phaseTransitions: session.phaseTransitions.filter(timing => timing.toPhase <= input.phase) } };
     }
     finally { session.busy = false; }
   }

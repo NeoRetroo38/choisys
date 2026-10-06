@@ -28,7 +28,11 @@ try {
     assert.equal(response.result.status, phase === 3 ? 'completed' : 'phase-complete');
     assert.deepEqual(await client.evaluate(request), response, 'retry stays idempotent');
     assert.deepEqual(Object.keys(response.result).sort(),
-      phase === 3 ? ['measurements', 'nextPhase', 'phase', 'sessionId', 'status'] : ['nextPhase', 'phase', 'sessionId', 'status']);
+      phase === 3 ? ['measurements', 'nextPhase', 'phase', 'phaseTransitions', 'sessionId', 'status']
+        : ['nextPhase', 'phase', 'phaseTransitions', 'sessionId', 'status']);
+    // One timing per phase after the first, measured by the product API; a retry above must not add any.
+    assert.deepEqual(response.result.phaseTransitions?.map(timing => [timing.fromPhase, timing.toPhase]),
+      [[1, 2], [2, 3]].slice(0, phase - 1));
     if (phase === 3) {
       // Coordinates are stored and returned by the C++ engine, 1-based.
       assert.deepEqual(response.result.measurements, [{ phase: 1, row: 1, column: 3 }, { phase: 2, row: 3, column: 1 }, { phase: 3, row: 2, column: 1 }]);
