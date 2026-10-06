@@ -7,6 +7,8 @@ import { initialState, sessionReducer } from '../sessionState';
 import { appendRun, parseHistory, type RunMeasurements } from '../history/runHistory';
 import { historyStorage } from '../history/historyStorage';
 import CubeView from './CubeView';
+import FadeIn from './FadeIn';
+import PopCircle from './PopCircle';
 
 interface ExperienceScreenProps {
   client: ReturnType<typeof createProductClient>;
@@ -60,23 +62,31 @@ export default function ExperienceScreen({ client, onSignOut, onUnauthorized }: 
     }
   }
 
-  async function submit() {
-    if (inFlight.current || !state.sessionId || !state.selected || state.error?.restart) return;
-    const request: EvaluateRequest = state.pending ?? {
-      scenarioId: 'choice-grid', sessionId: state.sessionId, phase: state.phase,
-      decisions: [{ position: state.selected, selected: true, value: 1 }],
-    };
+  async function send(request: EvaluateRequest) {
+    if (inFlight.current || state.error?.restart) return;
     inFlight.current = true;
     dispatch({ type: 'sending', request });
     try {
       const response = await client.evaluate(request);
       if (response.result.measurements) remember(response.result.measurements);
+      // Let the pop finish before the next phase fades in.
+      await new Promise(resolve => setTimeout(resolve, 260));
       dispatch({ type: 'received', result: response.result });
     } catch (error) {
       fail(error);
     } finally {
       inFlight.current = false;
     }
+  }
+
+  /** One tap selects and sends; no confirmation step. */
+  function choose(position: Position) {
+    if (inFlight.current || !state.sessionId || state.busy || state.pending || state.error?.restart) return;
+    dispatch({ type: 'selected', position });
+    void send({
+      scenarioId: 'choice-grid', sessionId: state.sessionId, phase: state.phase,
+      decisions: [{ position, selected: true, value: 1 }],
+    });
   }
 
   if (showCube) {
@@ -105,10 +115,10 @@ export default function ExperienceScreen({ client, onSignOut, onUnauthorized }: 
         paddingTop: insets.top,
         paddingBottom: insets.bottom + 12,
       }]}>
-        {state.screen === 'home' && <View style={[styles.home, { minHeight: Math.max(440, height - insets.top - insets.bottom - 82) }]}>
+        {state.screen === 'home' && <FadeIn key="home" style={[styles.home, { minHeight: Math.max(440, height - insets.top - insets.bottom - 82) }]}>
           <Text style={[styles.brand, { fontSize: canvasWidth * 0.092 }]}>choisys</Text>
           <Pressable accessibilityRole="button" accessibilityLabel="Comenzar las tres fases"
-            accessibilityHint="Elige y confirma un círculo en cada fase."
+            accessibilityHint="Elige un círculo en cada fase."
             accessibilityState={{ disabled: state.busy, busy: state.busy }} disabled={state.busy}
             onPress={start} style={({ pressed }) => [styles.start, {
               width: Math.max(78, canvasWidth * 0.215), height: Math.max(78, canvasWidth * 0.215),
@@ -120,42 +130,31 @@ export default function ExperienceScreen({ client, onSignOut, onUnauthorized }: 
           </Pressable>
           {state.error && <Text accessibilityRole="alert" style={styles.homeError}>{state.error.message}</Text>}
           {viewCube}
-        </View>}
+        </FadeIn>}
 
-        {state.screen === 'phase' && <View style={[styles.phase, { paddingTop: Math.max(38, height * 0.16 - insets.top) }]}>
+        {state.screen === 'phase' && <FadeIn key={`phase-${state.phase}`} style={[styles.phase, { paddingTop: Math.max(38, height * 0.16 - insets.top) }]}>
           <Text key={state.phase} accessibilityRole="header" accessibilityLiveRegion="polite"
             accessibilityLabel={`Fase ${state.phase} de 3. Elige un círculo.`}
             style={[styles.phaseTitle, { fontSize: canvasWidth * 0.091, marginLeft: canvasWidth * 0.139 }]}>
             {phaseTitles[state.phase]}
           </Text>
-          <View style={[styles.grid, { marginTop: canvasWidth * 0.232, gap: circleGap }]}>
+          <View key={`grid-${state.phase}`} style={[styles.grid, { marginTop: canvasWidth * 0.232, gap: circleGap }]}>
             {positions.map((row, rowIndex) => <View key={rowIndex} style={[styles.gridRow, { gap: circleGap }]}>
-              {row.map((position, columnIndex) => {
-                const selected = state.selected === position;
-                const disabled = state.busy || state.pending !== null || !!state.error?.restart;
-                return <Pressable key={position} accessibilityRole="checkbox"
-                  accessibilityLabel={`Círculo ${position}, fila ${rowIndex + 1}, columna ${columnIndex + 1}`}
-                  accessibilityHint="Toca para seleccionar o desmarcar. Después confirma tu elección."
-                  accessibilityState={{ checked: selected, disabled }} disabled={disabled}
-                  onPress={() => dispatch({ type: 'selected', position })}
-                  style={({ pressed }) => [styles.circle, { width: circleSize, height: circleSize },
-                    selected && styles.selectedCircle, pressed && styles.pressed]}>
-                  {selected && <View accessible={false} style={[styles.selectionCenter, {
-                    width: circleSize * 0.48, height: circleSize * 0.48,
-                  }]} />}
-                </Pressable>;
-              })}
+              {row.map((position, columnIndex) => <PopCircle key={position} size={circleSize}
+                delay={(rowIndex * 3 + columnIndex) * 45}
+                label={`Círculo ${position}, fila ${rowIndex + 1}, columna ${columnIndex + 1}`}
+                selected={state.selected === position}
+                disabled={state.busy || state.pending !== null || !!state.error?.restart}
+                onPress={() => choose(position)} />)}
             </View>)}
           </View>
 
           <View style={[styles.phaseActions, { marginTop: canvasWidth * 0.11 }]}>
-            {state.selected !== null && <Pressable accessibilityRole="button" onPress={submit}
-              accessibilityState={{ disabled: state.busy || !!state.error?.restart, busy: state.busy }}
-              disabled={state.busy || !!state.error?.restart}
-              style={({ pressed }) => [styles.confirm, (state.busy || state.error?.restart) && styles.disabled,
-                pressed && styles.pressed]}>
-              {state.busy && <ActivityIndicator color="#ffffff" size="small" />}
-              <Text style={styles.confirmText}>{state.busy ? 'Confirmando…' : state.pending ? 'Reintentar' : 'Confirmar'}</Text>
+            {state.busy && <ActivityIndicator color="#000000" size="small" />}
+            {state.pending && !state.busy && !state.error?.restart && <Pressable accessibilityRole="button"
+              onPress={() => void send(state.pending!)}
+              style={({ pressed }) => [styles.confirm, pressed && styles.pressed]}>
+              <Text style={styles.confirmText}>Reintentar</Text>
             </Pressable>}
             {state.error && <Text accessibilityRole="alert" style={styles.error}>{state.error.message}</Text>}
             {state.pending && !state.busy && !state.error?.restart && <Text style={styles.hint}>
@@ -167,9 +166,9 @@ export default function ExperienceScreen({ client, onSignOut, onUnauthorized }: 
             style={({ pressed }) => [styles.back, state.busy && styles.disabled, pressed && styles.pressed]}>
             <Text style={styles.secondaryText}>{state.error?.restart ? 'Volver y comenzar de nuevo' : 'Volver al inicio'}</Text>
           </Pressable>
-        </View>}
+        </FadeIn>}
 
-        {state.screen === 'result' && <View style={[styles.result, { minHeight: Math.max(440, height - insets.top - insets.bottom - 82) }]}>
+        {state.screen === 'result' && <FadeIn key="result" style={[styles.result, { minHeight: Math.max(440, height - insets.top - insets.bottom - 82) }]}>
           <Text style={styles.resultBrand}>choisys</Text>
           <View accessible={false} style={styles.completedDots}>
             {[1, 2, 3].map((dot) => <View key={dot} style={styles.completedDot} />)}
@@ -185,7 +184,7 @@ export default function ExperienceScreen({ client, onSignOut, onUnauthorized }: 
             style={({ pressed }) => [styles.back, pressed && styles.pressed]}>
             <Text style={styles.secondaryText}>Volver al inicio</Text>
           </Pressable>
-        </View>}
+        </FadeIn>}
 
         {state.screen !== 'phase' && <Pressable accessibilityRole="button" onPress={onSignOut}
           disabled={state.busy} style={({ pressed }) => [styles.signOut, state.busy && styles.disabled, pressed && styles.pressed]}>
