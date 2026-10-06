@@ -7,6 +7,8 @@ import FadeIn from './FadeIn';
 interface CubeViewProps { runs: RunMeasurements[]; size: number }
 
 const green = '#3dff7a';
+// Axes (row, column, phase) are blue so they stand apart from the white cube and the green data.
+const blue = '#4aa3ff';
 const mono = Platform.select({ ios: 'Menlo', default: 'monospace' });
 const defaultView = { yaw: Math.PI / 6, pitch: Math.PI / 9 };
 const maxPitch = Math.PI * 0.45;
@@ -90,20 +92,20 @@ export default function CubeView({ runs, size }: CubeViewProps) {
             const [x2, y2] = project(scaleVec(axis.dir, axisReach));
             const [lx, ly] = project(scaleVec(axis.dir, axisReach + 0.28));
             return <G key={axis.name}>
-              <Line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#ffffff" strokeOpacity={0.9} strokeWidth={1.4} />
-              <SvgText x={lx} y={ly} fill="#ffffff" fontSize={11} fontFamily={mono} textAnchor="middle">{axis.label}</SvgText>
+              <Line x1={x1} y1={y1} x2={x2} y2={y2} stroke={blue} strokeWidth={1.8} />
+              <SvgText x={lx} y={ly} fill={blue} fontSize={11} fontFamily={mono} textAnchor="middle">{axis.label}</SvgText>
             </G>;
           })}
-          <Line x1={zTip[0]} y1={zTip[1]} x2={arrow(1)[0]} y2={arrow(1)[1]} stroke="#ffffff" strokeWidth={1.4} />
-          <Line x1={zTip[0]} y1={zTip[1]} x2={arrow(-1)[0]} y2={arrow(-1)[1]} stroke="#ffffff" strokeWidth={1.4} />
+          <Line x1={zTip[0]} y1={zTip[1]} x2={arrow(1)[0]} y2={arrow(1)[1]} stroke={blue} strokeWidth={1.8} />
+          <Line x1={zTip[0]} y1={zTip[1]} x2={arrow(-1)[0]} y2={arrow(-1)[1]} stroke={blue} strokeWidth={1.8} />
           {[1, 2, 3].map(phase => {
             const [tx, ty] = project([0, 0, phase - 2]);
             return <G key={phase}>
-              <Circle cx={tx} cy={ty} r={2.2} fill="#ffffff" />
-              <SvgText x={tx + 8} y={ty - 6} fill={green} fontSize={11} fontFamily={mono}>{`f${phase}`}</SvgText>
+              <Circle cx={tx} cy={ty} r={2.6} fill={blue} />
+              <SvgText x={tx + 8} y={ty - 6} fill={blue} fontSize={11} fontFamily={mono}>{`f${phase}`}</SvgText>
             </G>;
           })}
-          <Circle cx={center} cy={center} r={2.6} fill="#ffffff" />
+          <Circle cx={center} cy={center} r={3} fill={blue} />
 
           {runs.map((run, index) => {
             const latest = index === runs.length - 1;
