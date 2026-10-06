@@ -111,9 +111,12 @@ export default function CubeView({ runs, size }: CubeViewProps) {
             const latest = index === runs.length - 1;
             const opacity = latest ? 1 : 0.28;
             const points = run.map(item => point(item.row, item.column, item.phase));
+            const path = points.map(([x, y]) => `${x},${y}`).join(' ');
             return <G key={index}>
-              <Polyline points={points.map(([x, y]) => `${x},${y}`).join(' ')} fill="none"
-                stroke={green} strokeOpacity={opacity} strokeWidth={latest ? 2 : 1.5} />
+              {/* The latest Run's decision line is bright white, with a soft halo for brightness. */}
+              {latest && <Polyline points={path} fill="none" stroke="#ffffff" strokeOpacity={0.22} strokeWidth={7} strokeLinejoin="round" strokeLinecap="round" />}
+              <Polyline points={path} fill="none" stroke={latest ? '#ffffff' : green} strokeOpacity={opacity}
+                strokeWidth={latest ? 2.4 : 1.5} strokeLinejoin="round" strokeLinecap="round" />
               {points.map(([x, y], pointIndex) => <G key={pointIndex}>
                 <Circle cx={x} cy={y} r={latest ? 5 : 4} fill={green} fillOpacity={opacity} />
                 {latest && <SvgText x={x + 8} y={y + 14} fill={green} fontSize={11} fontFamily={mono}>{`${pointIndex + 1}`}</SvgText>}
