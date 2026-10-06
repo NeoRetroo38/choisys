@@ -70,8 +70,10 @@ con identidad autenticada por backend. Nunca debe poblarse con `profileId` o
 Jerarquía: `USER < ADMIN < DEV < SUPERADMIN < SUPERDEV`. Por ahora solo se definen
 capacidades propias para `USER` y `SUPERDEV`; `ADMIN`, `DEV` y `SUPERADMIN` quedan
 reservados y tienen exactamente lo que tiene `USER`. La fuente de verdad del
-catálogo y de las concesiones está en `src/permissions.ts`; cuando exista la base,
-un seed la volcará a `permissions` y `role_permissions`.
+catálogo y de las concesiones está en `src/permissions.ts`. Tras aplicar la migración,
+`npm run db:seed --workspace apps/api` (necesita `DATABASE_URL`) la vuelca a
+`permissions` y `role_permissions`. Es idempotente y convergente: se puede repetir y
+elimina lo que ya no esté en el código.
 
 | Permiso | USER | SUPERDEV |
 |---|---|---|
@@ -118,7 +120,6 @@ Pendientes:
   sería un índice único parcial (`CREATE UNIQUE INDEX ON profiles (role) WHERE role = 'SUPERDEV'`)
   y Prisma, al no representarlo en el schema, lo borraría en la siguiente migración. Hoy lo
   garantiza `bootstrapSuperdev` en la aplicación;
-- el seed que carga `src/permissions.ts` en `permissions` y `role_permissions`;
 - revocar `UPDATE`/`DELETE` sobre `role_changes` al rol de la aplicación como defensa adicional
   al trigger, cuando exista ese rol.
 
