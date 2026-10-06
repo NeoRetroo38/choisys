@@ -42,8 +42,10 @@ La API ya tiene autenticación de producto (`/auth/register`, `/auth/login`, `/a
 desarrollo, `CHOISYS_DEV_MEMORY_AUTH=1` usa cuentas en memoria. Los endpoints públicos de
 perfil, historial y administración no existen todavía.
 
-Para asignar el primer SUPERDEV (una sola vez, en local, con `DATABASE_URL` en el entorno y
-una cuenta ya registrada) y dejarlo registrado en `role_changes`:
+Con la migración aplicada, `npm run db:seed --workspace apps/api` carga el catálogo de
+permisos y las asignaciones por rol (se puede repetir sin efectos). Después, para asignar el
+primer SUPERDEV (una sola vez, en local, con `DATABASE_URL` en el entorno y una cuenta ya
+registrada) y dejarlo registrado en `role_changes`:
 
 ```powershell
 npm run bootstrap:superdev --workspace apps/api -- <email> --confirm
