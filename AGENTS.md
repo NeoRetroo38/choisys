@@ -77,3 +77,24 @@ la UI, comprobada en el navegador o en dispositivo. Informa de lo que **no** pud
 
 PostgreSQL real y migraciones (no hay instancia identificada), inferencia, integración Wibaruim (sin
 especificación) y despliegue en producción.
+
+## Coordinación entre agentes (Git)
+
+Varios agentes pueden trabajar a la vez. Git es el canal de coordinación:
+
+- **Un directorio por agente.** Cada agente usa su propio `git worktree` (por ejemplo `daemon.codex` para
+  Codex y `daemon.codex-claude` para Claude). **Nunca cambies de rama ni ejecutes `npm ci`/`npm install` en un
+  directorio que usa otro agente**: reescribir `node_modules` tumba el Metro que esté corriendo.
+- **Una rama por tema**, con prefijo del agente: `codex/<tema>`, `claude/<tema>`. Crea la rama desde `main`
+  actualizado (`git fetch --all --prune`).
+- **Antes de empezar:** `git fetch --all --prune`, `git log --all --oneline -20` y `gh pr list` para ver qué hace
+  el otro agente y no duplicar trabajo.
+- **Commits pequeños y push frecuente de tu rama** (nunca de `main`), para que el otro agente vea tu progreso.
+- **Todo cambio entra por Pull Request.** Describe resumen, verificación, riesgo y reversión. Añade una sección
+  `Handoff` si queda trabajo a medias, con lo que falta y lo que no pudiste verificar.
+- **Revisión cruzada:** el otro agente revisa el diff del PR antes de que el dueño lo fusione. Nadie fusiona su
+  propio PR sin el visto bueno del dueño.
+- **Archivos propensos a conflicto:** `package.json`, `package-lock.json`, `AGENTS.md` y `README.md`. Anuncia en
+  el PR si los tocas y evita cambiar dependencias a la vez que otro agente.
+- **Si hay conflicto:** haz `rebase` de tu rama sobre `main`; no resuelvas a ciegas los cambios del otro agente
+  y pregunta al dueño si el conflicto afecta a decisiones de producto.
