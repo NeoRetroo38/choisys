@@ -29,15 +29,18 @@ function makeProjector(yaw: number, pitch: number, scale: number, center: number
 
 // Two separate elements, drawn only as edges:
 // - the outer cube: a plain box at +/-2 that frames the whole view;
-// - the decision grid: a 2 x 2 x 2 lattice whose 27 vertices (-1, 0, 1) are exactly the possible
-//   decisions (row, column, phase). One cell of padding separates it from the outer cube.
+// - the decision grid: a 2 x 2 x 2 lattice whose 27 vertices (-gridStep, 0, gridStep) are exactly the possible
+//   decisions (row, column, phase). A narrow gap separates it from the outer cube.
 const outerEdges: Array<[Vec, Vec]> = [];
 for (const a of [-2, 2]) for (const b of [-2, 2]) {
   outerEdges.push([[-2, a, b], [2, a, b]], [[a, -2, b], [a, 2, b]], [[a, b, -2], [a, b, 2]]);
 }
+// Distance between neighbouring decisions. The grid spans +/-gridStep; the outer cube is at +/-2.
+const gridStep = 1.5;
+const gridLevels = [-gridStep, 0, gridStep];
 const gridEdges: Array<[Vec, Vec]> = [];
-for (const a of [-1, 0, 1]) for (const b of [-1, 0, 1]) {
-  gridEdges.push([[-1, a, b], [1, a, b]], [[a, -1, b], [a, 1, b]], [[a, b, -1], [a, b, 1]]);
+for (const a of gridLevels) for (const b of gridLevels) {
+  gridEdges.push([[-gridStep, a, b], [gridStep, a, b]], [[a, -gridStep, b], [a, gridStep, b]], [[a, b, -gridStep], [a, b, gridStep]]);
 }
 
 // Axes cross at the origin (0,0,0), the pivot of the rotation. z is the phase axis, 1 → 3.
@@ -74,7 +77,7 @@ export default function CubeView({ runs, size }: CubeViewProps) {
   const scale = size * 0.15;
   const center = size / 2;
   const project = makeProjector(view.yaw, view.pitch, scale, center);
-  const point = (row: number, column: number, phase: number) => project([column - 2, row - 2, phase - 2]);
+  const point = (row: number, column: number, phase: number) => project([(column - 2) * gridStep, (row - 2) * gridStep, (phase - 2) * gridStep]);
 
   const zTip = project(scaleVec([0, 0, 1], axisReach));
   const zBack = project([0, 0, 2.0]);
@@ -111,7 +114,7 @@ export default function CubeView({ runs, size }: CubeViewProps) {
           <Line x1={zTip[0]} y1={zTip[1]} x2={arrow(1)[0]} y2={arrow(1)[1]} stroke={green} strokeWidth={1.8} />
           <Line x1={zTip[0]} y1={zTip[1]} x2={arrow(-1)[0]} y2={arrow(-1)[1]} stroke={green} strokeWidth={1.8} />
           {[1, 2, 3].map(phase => {
-            const [tx, ty] = project([0, 0, phase - 2]);
+            const [tx, ty] = project([0, 0, (phase - 2) * gridStep]);
             return <G key={phase}>
               <Circle cx={tx} cy={ty} r={2.6} fill={green} />
               <SvgText x={tx + 8} y={ty - 6} fill={green} fontSize={11} fontFamily={mono}>{`f${phase}`}</SvgText>
