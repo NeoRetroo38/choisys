@@ -109,7 +109,7 @@ export default function CubeView({ runs, size }: CubeViewProps) {
 
           {runs.map((run, index) => {
             const latest = index === runs.length - 1;
-            const opacity = latest ? 1 : 0.28;
+            const opacity = latest ? 1 : 0.45;
             const points = run.map(item => point(item.row, item.column, item.phase));
             const path = points.map(([x, y]) => `${x},${y}`).join(' ');
             return <G key={index}>
