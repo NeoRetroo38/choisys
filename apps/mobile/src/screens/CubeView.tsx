@@ -27,16 +27,17 @@ function makeProjector(yaw: number, pitch: number, scale: number, center: number
   };
 }
 
-// Gridded cube: its vertices are exactly the 27 possible decisions (row, column, phase), so only
-// the edges between neighbouring decisions are drawn. Lattice indices run -1, 0, 1 around the origin.
-const levels = [-1, 0, 1];
+// Gridded cube: 3 x 3 x 3 cubicles, one per possible decision (row, column, phase). Each decision sits
+// at the centre of its cubicle, half a cell away from the cube's walls, so only the edges are drawn.
+// Wall positions run -1.5, -0.5, 0.5, 1.5; decision indices run -1, 0, 1 around the origin.
+const walls = [-1.5, -0.5, 0.5, 1.5];
 const edges: Array<[Vec, Vec]> = [];
-for (const a of levels) for (const b of levels) {
-  edges.push([[-1, a, b], [1, a, b]], [[a, -1, b], [a, 1, b]], [[a, b, -1], [a, b, 1]]);
+for (const a of walls) for (const b of walls) {
+  edges.push([[-1.5, a, b], [1.5, a, b]], [[a, -1.5, b], [a, 1.5, b]], [[a, b, -1.5], [a, b, 1.5]]);
 }
 
 // Axes cross at the origin (0,0,0), the pivot of the rotation. z is the phase axis, 1 → 3.
-const axisReach = 1.5;
+const axisReach = 2.05;
 const axes: Array<{ name: string; dir: Vec; label: string }> = [
   { name: 'x', dir: [1, 0, 0], label: 'x col' },
   { name: 'y', dir: [0, 1, 0], label: 'y row' },
@@ -66,13 +67,13 @@ export default function CubeView({ runs, size }: CubeViewProps) {
     },
   })).current;
 
-  const scale = size * 0.26;
+  const scale = size * 0.19;
   const center = size / 2;
   const project = makeProjector(view.yaw, view.pitch, scale, center);
   const point = (row: number, column: number, phase: number) => project([column - 2, row - 2, phase - 2]);
 
   const zTip = project(scaleVec([0, 0, 1], axisReach));
-  const zBack = project([0, 0, 1.15]);
+  const zBack = project([0, 0, 1.55]);
   const arrowAngle = Math.atan2(zTip[1] - zBack[1], zTip[0] - zBack[0]);
   const arrow = (side: number): [number, number] => [
     zTip[0] - 9 * Math.cos(arrowAngle + side * 0.45), zTip[1] - 9 * Math.sin(arrowAngle + side * 0.45),
@@ -86,13 +87,13 @@ export default function CubeView({ runs, size }: CubeViewProps) {
           {edges.map(([from, to], index) => {
             const [x1, y1] = project(from);
             const [x2, y2] = project(to);
-            return <Line key={index} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#ffffff" strokeOpacity={0.45} strokeWidth={1} />;
+            return <Line key={index} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#ffffff" strokeOpacity={0.38} strokeWidth={1} />;
           })}
 
           {axes.map(axis => {
             const [x1, y1] = project(scaleVec(axis.dir, -axisReach * 0.6));
             const [x2, y2] = project(scaleVec(axis.dir, axisReach));
-            const [lx, ly] = project(scaleVec(axis.dir, axisReach + 0.25));
+            const [lx, ly] = project(scaleVec(axis.dir, axisReach + 0.28));
             return <G key={axis.name}>
               <Line x1={x1} y1={y1} x2={x2} y2={y2} stroke={green} strokeWidth={1.8} />
               <SvgText x={lx} y={ly} fill={green} fontSize={11} fontFamily={mono} textAnchor="middle">{axis.label}</SvgText>
