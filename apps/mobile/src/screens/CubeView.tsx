@@ -113,13 +113,14 @@ export default function CubeView({ runs, size }: CubeViewProps) {
             const points = run.map(item => point(item.row, item.column, item.phase));
             const path = points.map(([x, y]) => `${x},${y}`).join(' ');
             return <G key={index}>
-              {/* The latest Run's decision line is bright white, with a soft halo for brightness. */}
+              {/* The latest Run (line, points and numbers) is bright white with a soft halo; older Runs stay green. */}
               {latest && <Polyline points={path} fill="none" stroke="#ffffff" strokeOpacity={0.22} strokeWidth={7} strokeLinejoin="round" strokeLinecap="round" />}
               <Polyline points={path} fill="none" stroke={latest ? '#ffffff' : green} strokeOpacity={opacity}
                 strokeWidth={latest ? 2.4 : 1.5} strokeLinejoin="round" strokeLinecap="round" />
               {points.map(([x, y], pointIndex) => <G key={pointIndex}>
-                <Circle cx={x} cy={y} r={latest ? 5 : 4} fill={green} fillOpacity={opacity} />
-                {latest && <SvgText x={x + 8} y={y + 14} fill={green} fontSize={11} fontFamily={mono}>{`${pointIndex + 1}`}</SvgText>}
+                {latest && <Circle cx={x} cy={y} r={9} fill="#ffffff" fillOpacity={0.22} />}
+                <Circle cx={x} cy={y} r={latest ? 5 : 4} fill={latest ? '#ffffff' : green} fillOpacity={opacity} />
+                {latest && <SvgText x={x + 8} y={y + 14} fill="#ffffff" fontSize={11} fontFamily={mono}>{`${pointIndex + 1}`}</SvgText>}
               </G>)}
             </G>;
           })}
