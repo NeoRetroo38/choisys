@@ -7,8 +7,8 @@ import FadeIn from './FadeIn';
 interface CubeViewProps { runs: RunMeasurements[]; size: number }
 
 const green = '#39ff14';
-// Axes (row, column, phase) are blue so they stand apart from the white cube and the green data.
-const blue = '#12b5ff';
+// Experiment: axes in neon green; past Runs (lines and points) in red.
+const red = '#ff2a2a';
 const mono = Platform.select({ ios: 'Menlo', default: 'monospace' });
 const defaultView = { yaw: Math.PI / 6, pitch: Math.PI / 9 };
 const maxPitch = Math.PI * 0.45;
@@ -92,20 +92,20 @@ export default function CubeView({ runs, size }: CubeViewProps) {
             const [x2, y2] = project(scaleVec(axis.dir, axisReach));
             const [lx, ly] = project(scaleVec(axis.dir, axisReach + 0.28));
             return <G key={axis.name}>
-              <Line x1={x1} y1={y1} x2={x2} y2={y2} stroke={blue} strokeWidth={1.8} />
-              <SvgText x={lx} y={ly} fill={blue} fontSize={11} fontFamily={mono} textAnchor="middle">{axis.label}</SvgText>
+              <Line x1={x1} y1={y1} x2={x2} y2={y2} stroke={green} strokeWidth={1.8} />
+              <SvgText x={lx} y={ly} fill={green} fontSize={11} fontFamily={mono} textAnchor="middle">{axis.label}</SvgText>
             </G>;
           })}
-          <Line x1={zTip[0]} y1={zTip[1]} x2={arrow(1)[0]} y2={arrow(1)[1]} stroke={blue} strokeWidth={1.8} />
-          <Line x1={zTip[0]} y1={zTip[1]} x2={arrow(-1)[0]} y2={arrow(-1)[1]} stroke={blue} strokeWidth={1.8} />
+          <Line x1={zTip[0]} y1={zTip[1]} x2={arrow(1)[0]} y2={arrow(1)[1]} stroke={green} strokeWidth={1.8} />
+          <Line x1={zTip[0]} y1={zTip[1]} x2={arrow(-1)[0]} y2={arrow(-1)[1]} stroke={green} strokeWidth={1.8} />
           {[1, 2, 3].map(phase => {
             const [tx, ty] = project([0, 0, phase - 2]);
             return <G key={phase}>
-              <Circle cx={tx} cy={ty} r={2.6} fill={blue} />
-              <SvgText x={tx + 8} y={ty - 6} fill={blue} fontSize={11} fontFamily={mono}>{`f${phase}`}</SvgText>
+              <Circle cx={tx} cy={ty} r={2.6} fill={green} />
+              <SvgText x={tx + 8} y={ty - 6} fill={green} fontSize={11} fontFamily={mono}>{`f${phase}`}</SvgText>
             </G>;
           })}
-          <Circle cx={center} cy={center} r={3} fill={blue} />
+          <Circle cx={center} cy={center} r={3} fill={green} />
 
           {runs.map((run, index) => {
             const latest = index === runs.length - 1;
@@ -113,13 +113,13 @@ export default function CubeView({ runs, size }: CubeViewProps) {
             const points = run.map(item => point(item.row, item.column, item.phase));
             const path = points.map(([x, y]) => `${x},${y}`).join(' ');
             return <G key={index}>
-              {/* The latest Run (line, points and numbers) is bright white with a soft halo; older Runs stay green. */}
+              {/* The latest Run (line, points and numbers) is bright white with a soft halo; older Runs are red. */}
               {latest && <Polyline points={path} fill="none" stroke="#ffffff" strokeOpacity={0.22} strokeWidth={7} strokeLinejoin="round" strokeLinecap="round" />}
-              <Polyline points={path} fill="none" stroke={latest ? '#ffffff' : green} strokeOpacity={opacity}
+              <Polyline points={path} fill="none" stroke={latest ? '#ffffff' : red} strokeOpacity={opacity}
                 strokeWidth={latest ? 2.4 : 1.5} strokeLinejoin="round" strokeLinecap="round" />
               {points.map(([x, y], pointIndex) => <G key={pointIndex}>
                 {latest && <Circle cx={x} cy={y} r={9} fill="#ffffff" fillOpacity={0.22} />}
-                <Circle cx={x} cy={y} r={latest ? 5 : 4} fill={latest ? '#ffffff' : green} fillOpacity={opacity} />
+                <Circle cx={x} cy={y} r={latest ? 5 : 4} fill={latest ? '#ffffff' : red} fillOpacity={opacity} />
                 {latest && <SvgText x={x + 8} y={y + 14} fill="#ffffff" fontSize={11} fontFamily={mono}>{`${pointIndex + 1}`}</SvgText>}
               </G>)}
             </G>;
