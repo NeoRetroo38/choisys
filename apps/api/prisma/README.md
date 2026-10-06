@@ -6,11 +6,25 @@ base de datos y Prisma no contienen fórmulas, pesos, matrices ni lógica del Cu
 
 ## Estado
 
-La estructura y la capa de servicios están preparadas, pero todavía no se ha
-aplicado ninguna migración. Durante su creación no existían `DATABASE_URL`,
-servidor PostgreSQL identificado, schema anterior ni migraciones que respaldar.
-La primera migración debe generarse y revisarse cuando se conozca la instancia y
-su política de backup. No usar `db push` para sustituir ese proceso.
+La estructura y la capa de servicios están preparadas. Existe una **migración inicial
+revisada**, `migrations/20261006000000_initial/migration.sql`, pero **no se ha aplicado a
+ninguna base**: aún no hay `DATABASE_URL` ni servidor PostgreSQL identificado. Antes de
+aplicarla en una instancia hay que confirmar su política de backup. No usar `db push` para
+sustituir este proceso.
+
+La migración contiene el SQL generado por `prisma migrate diff` y, al final, las invariantes
+que Prisma no representa: CHECKs de `cube_data`, formato de las claves de `permissions`,
+`role_changes` con rol distinto en cada cambio y un trigger que la mantiene **solo de
+inserción** (rechaza `DELETE` y cualquier `UPDATE` salvo el que anula los enlaces a perfil al
+borrar una cuenta). Se verifica contra un PostgreSQL real en memoria, sin servidor:
+
+```powershell
+npm install --no-save @electric-sql/pglite
+node apps/api/prisma/verify-migration.mjs
+```
+
+`--no-save` evita tocar `package.json` y el lockfile. Cuando exista una instancia, aplicarla con
+`npm run db:migrate` (`prisma migrate deploy`) en lugar de `migrate dev`.
 
 ## Tablas
 
@@ -86,30 +100,27 @@ npm run db:validate
 npm run db:generate
 ```
 
-Cuando exista una base de desarrollo identificada y respaldada:
+Cuando exista una base de desarrollo identificada y respaldada, aplicar la migración
+inicial con `npm run db:migrate`. Los cambios posteriores del schema se generan con
+`prisma migrate dev --create-only` y se revisan igual que esta.
 
-```powershell
-npm exec --workspace apps/api prisma migrate dev -- --schema prisma/schema.prisma --name initial_accounts_profiles_cube_data
-```
+Invariantes que la migración inicial ya refuerza en PostgreSQL:
 
-Antes de aplicar la migración hay que revisar el SQL generado y añadir checks de
-PostgreSQL para reforzar los invariantes que Prisma no representa en el schema:
-
-- `session_index IS NULL OR session_index >= 0`;
-- `phase_index IS NULL OR phase_index >= 0`;
+- `session_index` y `phase_index` nunca son negativos;
 - un `RUN` tiene `run_id`, `session_index` y `phase_index` nulos;
-- una `SESSION` tiene esos tres campos definidos y `run_id <> id`.
+- una `SESSION` tiene esos tres campos definidos y `run_id <> id`;
+- las claves de `permissions` tienen formato `area.accion`;
+- cada fila de `role_changes` cambia realmente el rol, y la tabla es solo de inserción.
 
-Pendientes del modelo de roles, tampoco representables en Prisma:
+Pendientes:
 
-- `role_changes` solo de inserción: revocar `UPDATE` y `DELETE` al rol de aplicación o
-  añadir un trigger que los rechace;
-- decidir si debe existir un único `SUPERDEV`: sería un índice único parcial,
-  `CREATE UNIQUE INDEX ON profiles (role) WHERE role = 'SUPERDEV'`;
-- el seed que carga `src/permissions.ts` en `permissions` y `role_permissions`.
-
-La capa de servicio ya valida los índices y construye las relaciones correctas.
-Los checks de base de datos quedan pendientes de la primera migración revisada.
+- decidir si debe existir un único `SUPERDEV`. Se deja **fuera de la migración** a propósito:
+  sería un índice único parcial (`CREATE UNIQUE INDEX ON profiles (role) WHERE role = 'SUPERDEV'`)
+  y Prisma, al no representarlo en el schema, lo borraría en la siguiente migración. Hoy lo
+  garantiza `bootstrapSuperdev` en la aplicación;
+- el seed que carga `src/permissions.ts` en `permissions` y `role_permissions`;
+- revocar `UPDATE`/`DELETE` sobre `role_changes` al rol de la aplicación como defensa adicional
+  al trigger, cuando exista ese rol.
 
 ## Ejemplo conceptual
 
