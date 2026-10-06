@@ -3,7 +3,7 @@ import { once } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 import type { AddressInfo } from 'node:net';
-import type { EvaluateRequest, EvaluateResponse } from '@scenarys/shared';
+import type { EvaluateRequest, EvaluateResponse, Measurement } from '@scenarys/shared';
 import { createApp } from '../src/app.js';
 import { readConfig } from '../src/config.js';
 import { NeoCubeClient } from '../src/neoCubeClient.js';
@@ -16,11 +16,13 @@ const input: EvaluateRequest = {
   scenarioId: 'choice-grid', sessionId: randomUUID(), phase: 1,
   decisions: [{ position: 1, selected: true, value: 1 }],
 };
+const measurements: Measurement[] = [{ phase: 1, row: 1, column: 1 }, { phase: 2, row: 2, column: 3 }, { phase: 3, row: 3, column: 2 }];
 const success = (request: EvaluateRequest): EvaluateResponse => ({
   ok: true,
   result: { sessionId: request.sessionId, phase: request.phase,
     status: request.phase === 3 ? 'completed' : 'phase-complete',
-    nextPhase: request.phase === 1 ? 2 : request.phase === 2 ? 3 : null },
+    nextPhase: request.phase === 1 ? 2 : request.phase === 2 ? 3 : null,
+    ...(request.phase === 3 ? { measurements } : {}) },
 });
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } });
 const rejectsCode = async (promise: Promise<unknown>, status: number, code: string) => {
@@ -36,6 +38,28 @@ test('client authenticates only to fixed loopback and strips extra upstream fiel
     return json({ ...success(input), debug: 'private', result: { ...success(input).result, internal: 'private' } });
   });
   assert.deepEqual(await client.evaluate(input), success(input));
+});
+
+test('final phase forwards only the three public measurements and rejects malformed or premature ones', async () => {
+  const last: EvaluateRequest = { ...input, phase: 3 };
+  const client = new NeoCubeClient(testCredential, 2000, async () => json({
+    ok: true, result: { ...success(last).result, internal: 'private',
+      measurements: measurements.map(item => ({ ...item, weight: 'private' })).map(({ weight: _weight, ...rest }) => rest) },
+  }));
+  assert.deepEqual(await client.evaluate(last), success(last));
+  const bad = [
+    undefined, [], measurements.slice(0, 2), [...measurements].reverse(),
+    measurements.map(item => ({ ...item, extra: 1 })),
+    measurements.map(item => ({ ...item, row: 4 })),
+    measurements.map(item => ({ ...item, column: 0 })),
+    measurements.map(item => ({ ...item, row: 1.5 })),
+  ];
+  for (const value of bad) {
+    const broken = new NeoCubeClient(testCredential, 100, async () => json({ ok: true, result: { ...success(last).result, measurements: value } }));
+    await rejectsCode(broken.evaluate(last), 502, 'NEO_CUBE_INVALID_RESPONSE');
+  }
+  const early = new NeoCubeClient(testCredential, 100, async () => json({ ok: true, result: { ...success(input).result, measurements } }));
+  await rejectsCode(early.evaluate(input), 502, 'NEO_CUBE_INVALID_RESPONSE');
 });
 
 test('client maps offline and timeout without reflecting exception messages', async () => {
@@ -118,7 +142,7 @@ test('HTTP flow creates sessions, validates bodies/CORS and keeps token out of r
   const calls: EvaluateRequest[] = [];
   const app = createApp(readConfig({ CHOISYS_LOCAL_API_TOKEN: testCredential, API_ALLOWED_ORIGINS: 'http://localhost:8081' }), {
     evaluate: async request => { calls.push(request); return success(request); },
-  });
+  }, { allowUnauthenticatedProduct: true });
   const server = app.listen(0, '127.0.0.1');
   await once(server, 'listening');
   t.after(() => new Promise<void>((resolve, reject) => { server.close(error => error ? reject(error) : resolve()); server.closeAllConnections(); }));

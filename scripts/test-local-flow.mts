@@ -7,7 +7,8 @@ import type { EvaluateRequest, Phase } from '@scenarys/shared';
 
 // Optional integration check: requires the private C++ service already running.
 // Credentials come only from the process environment, never from mobile code.
-const app = createApp(readConfig());
+// Accounts are bypassed on purpose: this script validates the C++ bridge only (auth is covered by auth.test.ts).
+const app = createApp(readConfig(), undefined, { allowUnauthenticatedProduct: true });
 const server = app.listen(0, '127.0.0.1');
 await once(server, 'listening');
 try {
@@ -16,16 +17,22 @@ try {
   const baseUrl = `http://127.0.0.1:${address.port}`;
   const client = createProductClient(baseUrl);
   const { session } = await client.startSession();
+  const positions = { 1: 3, 2: 7, 3: 4 } as const; // row/column per phase: (1,3), (3,1), (2,1)
   for (const phase of [1, 2, 3] as Phase[]) {
     const request: EvaluateRequest = {
       scenarioId: 'choice-grid', sessionId: session.sessionId, phase,
-      decisions: [{ position: 5, selected: true, value: 1 }],
+      decisions: [{ position: positions[phase], selected: true, value: 1 }],
     };
     const response = await client.evaluate(request);
     assert.equal(response.result.phase, phase);
     assert.equal(response.result.status, phase === 3 ? 'completed' : 'phase-complete');
     assert.deepEqual(await client.evaluate(request), response, 'retry stays idempotent');
-    assert.deepEqual(Object.keys(response.result).sort(), ['nextPhase', 'phase', 'sessionId', 'status']);
+    assert.deepEqual(Object.keys(response.result).sort(),
+      phase === 3 ? ['measurements', 'nextPhase', 'phase', 'sessionId', 'status'] : ['nextPhase', 'phase', 'sessionId', 'status']);
+    if (phase === 3) {
+      // Coordinates are stored and returned by the C++ engine, 1-based.
+      assert.deepEqual(response.result.measurements, [{ phase: 1, row: 1, column: 3 }, { phase: 2, row: 3, column: 1 }, { phase: 3, row: 2, column: 1 }]);
+    }
   }
   const denied = await fetch(`${baseUrl}/sessions`, {
     method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'https://untrusted.invalid' },

@@ -5,9 +5,18 @@
   "dependencies": {
     "@scenarys/shared": "0.1.0",
     "expo": "~57.0.26",
+    "expo-constants": "~57.0.20",
+    "expo-linking": "~57.0.11",
+    "expo-router": "~57.0.24",
+    "expo-secure-store": "~57.0.4",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
-    "react-native": "0.86.3"
+    "react-dom": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.26.0",
+    "react-native-svg": "15.15.4",
+    "react-native-web": "^0.21.2"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
@@ -21,7 +30,7 @@
     "web": "expo start --web",
     "check": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test tests/productFlow.test.ts",
+    "test": "node --import tsx --test tests/productFlow.test.ts tests/authSession.test.ts tests/runHistory.test.ts",
     "lint": "expo lint"
   },
   "private": true

@@ -9,6 +9,9 @@
   "scripts": {
     "mobile": "npm run start --workspace apps/mobile",
     "api": "npm run dev --workspace apps/api",
+    "db:format": "npm run db:format --workspace apps/api",
+    "db:validate": "npm run db:validate --workspace apps/api",
+    "db:generate": "npm run db:generate --workspace apps/api",
     "build": "npm run build --workspace apps/api && npm run build --workspace packages/core",
     "check:public": "node scripts/check-public-boundary.mjs",
     "check": "npm run check:public && npm run check --workspace apps/api && npm run check --workspace packages/core && npm run check --workspace apps/mobile",

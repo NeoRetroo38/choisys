@@ -24,6 +24,7 @@ test('selection, loading, three responses and completion use the product API con
     return json({ ok: true, result: {
       sessionId, phase: payload.phase, status: payload.phase === 3 ? 'completed' : 'phase-complete',
       nextPhase: payload.phase === 1 ? 2 : payload.phase === 2 ? 3 : null,
+      ...(payload.phase === 3 ? { measurements: [{ phase: 1, row: 2, column: 2 }, { phase: 2, row: 2, column: 2 }, { phase: 3, row: 2, column: 2 }] } : {}),
     } });
   };
   const client = createProductClient('http://127.0.0.1:3000', transport);
@@ -44,6 +45,7 @@ test('selection, loading, three responses and completion use the product API con
     assert.equal(state.pending, null);
   }
   assert.equal(state.screen, 'result');
+  assert.deepEqual(state.measurements, [{ phase: 1, row: 2, column: 2 }, { phase: 2, row: 2, column: 2 }, { phase: 3, row: 2, column: 2 }]);
   assert.deepEqual(paths, ['http://127.0.0.1:3000/sessions', ...Array(3).fill('http://127.0.0.1:3000/evaluate')]);
 });
 
@@ -78,6 +80,20 @@ test('unknown response fields and mismatched phases are rejected without exposin
       return true;
     });
   }
+});
+
+test('measurements are validated structurally and unexpected fields never reach the UI', async () => {
+  const final = { ...request, phase: 3 as Phase };
+  const base = { sessionId, phase: 3, status: 'completed', nextPhase: null };
+  const good = [{ phase: 1, row: 1, column: 3 }, { phase: 2, row: 2, column: 1 }, { phase: 3, row: 3, column: 2 }];
+  const accepted = createProductClient('http://127.0.0.1:3000', async () => json({ ok: true, result: { ...base, measurements: good } }));
+  assert.deepEqual((await accepted.evaluate(final)).result.measurements, good);
+  for (const measurements of [undefined, [], good.slice(0, 2), good.map(item => ({ ...item, weight: 1 })), good.map(item => ({ ...item, row: 4 })), [...good].reverse()]) {
+    const client = createProductClient('http://127.0.0.1:3000', async () => json({ ok: true, result: { ...base, measurements } }));
+    await assert.rejects(client.evaluate(final));
+  }
+  const early = createProductClient('http://127.0.0.1:3000', async () => json({ ok: true, result: { sessionId, phase: 1, status: 'phase-complete', nextPhase: 2, measurements: good } }));
+  await assert.rejects(early.evaluate(request));
 });
 
 test('expired session asks for restart using controlled text', async () => {

@@ -1,0 +1,36 @@
+import { Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AuthProvider, useAuth } from '../auth/AuthProvider';
+
+function AuthenticatedRoutes() {
+  const { controller, state } = useAuth();
+  if (state.status === 'loading' || state.status === 'error') {
+    return <View style={styles.loading}>
+      <Text style={styles.brand}>choisys</Text>
+      {state.status === 'loading' ? <ActivityIndicator color="#000000" accessibilityLabel="Comprobando sesión" /> : <>
+        <Text accessibilityRole="alert" style={styles.error}>{state.error}</Text>
+        <Pressable accessibilityRole="button" style={styles.retry} onPress={() => void controller.bootstrap()}>
+          <Text style={styles.retryText}>Reintentar</Text>
+        </Pressable>
+      </>}
+    </View>;
+  }
+  return <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#ffffff' }, animation: 'fade' }}>
+    <Stack.Protected guard={state.status === 'signedIn'}><Stack.Screen name="index" /></Stack.Protected>
+    <Stack.Protected guard={state.status === 'signedOut'}>
+      <Stack.Screen name="sign-in" /><Stack.Screen name="register" />
+    </Stack.Protected>
+  </Stack>;
+}
+
+export default function RootLayout() {
+  return <AuthProvider><StatusBar style="dark" /><AuthenticatedRoutes /></AuthProvider>;
+}
+const styles = StyleSheet.create({
+  loading: { flex: 1, backgroundColor: '#ffffff', justifyContent: 'center', alignItems: 'center', gap: 28, padding: 32 },
+  brand: { fontSize: 32, color: '#000000', fontWeight: '400' },
+  error: { color: '#444444', textAlign: 'center', lineHeight: 22 },
+  retry: { borderRadius: 30, backgroundColor: '#000000', paddingVertical: 16, paddingHorizontal: 32 },
+  retryText: { color: '#ffffff', fontSize: 16 },
+});

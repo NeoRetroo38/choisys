@@ -1,0 +1,101 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+  DEV
+  SUPERDEV
+}
+
+enum CubeDataType {
+  SESSION
+  RUN
+}
+
+enum CubeDataStatus {
+  CREATED
+  ACTIVE
+  COMPLETED
+  INTERRUPTED
+  FAILED
+}
+
+model Account {
+  id           String    @id @default(uuid()) @db.Uuid
+  email        String    @unique @db.VarChar(320)
+  passwordHash String    @map("password_hash") @db.VarChar(512)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  lastLoginAt  DateTime? @map("last_login_at") @db.Timestamptz(3)
+  isActive     Boolean   @default(true) @map("is_active")
+  profile      Profile?
+  sessions     AccountSession[]
+
+  @@map("accounts")
+}
+
+model AccountSession {
+  id         String    @id @default(uuid()) @db.Uuid
+  accountId  String    @map("account_id") @db.Uuid
+  tokenHash  String    @unique @map("token_hash") @db.VarChar(64)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastSeenAt DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(3)
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(3)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(3)
+  account    Account   @relation(fields: [accountId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([accountId])
+  @@index([expiresAt])
+  @@map("account_sessions")
+}
+
+model Profile {
+  id          String     @id @default(uuid()) @db.Uuid
+  accountId   String     @unique @map("account_id") @db.Uuid
+  role        Role       @default(USER)
+  displayName String     @map("display_name") @db.VarChar(120)
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  account     Account    @relation(fields: [accountId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  cubeData    CubeData[]
+
+  @@index([role])
+  @@map("profiles")
+}
+
+model CubeData {
+  id              String         @id @default(uuid()) @db.Uuid
+  profileId       String         @map("profile_id") @db.Uuid
+  type            CubeDataType
+  runId           String?        @map("run_id") @db.Uuid
+  sessionIndex    Int?           @map("session_index")
+  phaseIndex      Int?           @map("phase_index")
+  status          CubeDataStatus @default(CREATED)
+  inputData       Json?          @map("input_data") @db.JsonB
+  outputData      Json?          @map("output_data") @db.JsonB
+  inferenceData   Json?          @map("inference_data") @db.JsonB
+  metadata        Json?          @db.JsonB
+  engineVersion   String         @map("engine_version") @db.VarChar(64)
+  scenarioVersion String         @map("scenario_version") @db.VarChar(64)
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+  profile         Profile        @relation(fields: [profileId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  run             CubeData?      @relation("RunSessions", fields: [runId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  sessions        CubeData[]     @relation("RunSessions")
+
+  @@unique([runId, sessionIndex])
+  @@unique([runId, phaseIndex])
+  @@index([profileId])
+  @@index([runId])
+  @@index([type])
+  @@index([createdAt])
+  @@index([profileId, createdAt])
+  @@map("cube_data")
+}

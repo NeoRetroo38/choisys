@@ -1,6 +1,18 @@
-import type { EvaluateRequest, EvaluateResponse } from '@scenarys/shared';
+import type { EvaluateRequest, EvaluateResponse, Measurement } from '@scenarys/shared';
 import { ApiError } from './errors.js';
 import { record } from './validation.js';
+/** Structural check only: exactly one in-range entry per phase, in order. Values are forwarded untouched. */
+function measurementsOrThrow(value: unknown): Measurement[] {
+  if (!Array.isArray(value) || value.length !== 3) throw new ApiError(502, 'NEO_CUBE_INVALID_RESPONSE');
+  return value.map((item, index) => {
+    if (!record(item) || Object.keys(item).length !== 3 || item.phase !== index + 1 ||
+      !Number.isInteger(item.row) || !Number.isInteger(item.column) ||
+      (item.row as number) < 1 || (item.row as number) > 3 || (item.column as number) < 1 || (item.column as number) > 3) {
+      throw new ApiError(502, 'NEO_CUBE_INVALID_RESPONSE');
+    }
+    return { phase: item.phase as Measurement['phase'], row: item.row as Measurement['row'], column: item.column as Measurement['column'] };
+  });
+}
 export interface CubeClient { evaluate(input: EvaluateRequest): Promise<EvaluateResponse> }
 type Fetch = typeof globalThis.fetch;
 /** Fixed loopback destination; this credential never crosses the product API. */
@@ -50,8 +62,13 @@ export class NeoCubeClient implements CubeClient {
         (input.phase === 1 && (result.status !== 'phase-complete' || result.nextPhase !== 2)) ||
         (input.phase === 2 && (result.status !== 'phase-complete' || result.nextPhase !== 3)) ||
         (input.phase === 3 && (result.status !== 'completed' || result.nextPhase !== null))) throw new ApiError(502, 'NEO_CUBE_INVALID_RESPONSE');
-      return { ok: true, result: { sessionId: input.sessionId, phase: input.phase,
-        status: result.status as 'phase-complete' | 'completed', nextPhase: result.nextPhase as 2 | 3 | null } };
+      const base = { sessionId: input.sessionId, phase: input.phase,
+        status: result.status as 'phase-complete' | 'completed', nextPhase: result.nextPhase as 2 | 3 | null };
+      if (input.phase !== 3) {
+        if ('measurements' in result) throw new ApiError(502, 'NEO_CUBE_INVALID_RESPONSE');
+        return { ok: true, result: base };
+      }
+      return { ok: true, result: { ...base, measurements: measurementsOrThrow(result.measurements) } };
     } catch (error) {
       if (error instanceof ApiError) throw error;
       if (controller.signal.aborted) throw new ApiError(504, 'NEO_CUBE_TIMEOUT');

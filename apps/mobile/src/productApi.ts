@@ -1,9 +1,13 @@
-import type { EvaluateRequest, EvaluateResponse, StartSessionResponse } from '@scenarys/shared';
+import type { EvaluateRequest, EvaluateResponse, Measurement, StartSessionResponse } from '@scenarys/shared';
 
 export interface UiError { message: string; restart: boolean }
 
 class ProductApiError extends Error {
   constructor(readonly code: string) { super(code); }
+}
+
+export function isAuthenticationError(error: unknown): boolean {
+  return error instanceof ProductApiError && error.code === 'AUTH_REQUIRED';
 }
 
 export function toUiError(error: unknown): UiError {
@@ -36,9 +40,23 @@ function keys(value: Record<string, unknown>, expected: string[]): boolean {
   return Object.keys(value).length === expected.length && expected.every((key) => Object.hasOwn(value, key));
 }
 
+/** Structural check only; coordinates are drawn exactly as received. */
+function readMeasurements(value: unknown): Measurement[] {
+  if (!Array.isArray(value) || value.length !== 3) throw new ProductApiError('INVALID_RESPONSE');
+  return value.map((item, index) => {
+    if (!record(item) || !keys(item, ['phase', 'row', 'column']) || item.phase !== index + 1
+      || !Number.isInteger(item.row) || !Number.isInteger(item.column)
+      || (item.row as number) < 1 || (item.row as number) > 3 || (item.column as number) < 1 || (item.column as number) > 3) {
+      throw new ProductApiError('INVALID_RESPONSE');
+    }
+    return { phase: item.phase as Measurement['phase'], row: item.row as Measurement['row'], column: item.column as Measurement['column'] };
+  });
+}
+
 const sessionIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-export function createProductClient(baseUrl: string | undefined, transport: typeof fetch = fetch, timeoutMs = 8000) {
+export function createProductClient(baseUrl: string | undefined, transport: typeof fetch = fetch, timeoutMs = 8000,
+  getToken: () => string | null = () => null) {
   async function post(endpoint: '/sessions' | '/evaluate', payload: unknown): Promise<unknown> {
     let url: URL;
     try {
@@ -51,9 +69,10 @@ export function createProductClient(baseUrl: string | undefined, transport: type
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
+      const token = getToken();
       const response = await transport(`${url.origin}${endpoint}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify(payload), signal: controller.signal, redirect: 'error',
       });
       if (Number(response.headers.get('content-length')) > 4096) throw new ProductApiError('INVALID_RESPONSE');
@@ -87,12 +106,15 @@ export function createProductClient(baseUrl: string | undefined, transport: type
       const body = await post('/evaluate', request);
       if (!record(body) || !keys(body, ['ok', 'result']) || body.ok !== true || !record(body.result)) throw new ProductApiError('INVALID_RESPONSE');
       const result = body.result;
-      if (!keys(result, ['sessionId', 'phase', 'status', 'nextPhase']) || result.sessionId !== request.sessionId || result.phase !== request.phase) throw new ProductApiError('INVALID_RESPONSE');
+      const last = request.phase === 3;
+      if (!keys(result, last ? ['sessionId', 'phase', 'status', 'nextPhase', 'measurements'] : ['sessionId', 'phase', 'status', 'nextPhase'])
+        || result.sessionId !== request.sessionId || result.phase !== request.phase) throw new ProductApiError('INVALID_RESPONSE');
       const valid = request.phase === 1 ? result.status === 'phase-complete' && result.nextPhase === 2
         : request.phase === 2 ? result.status === 'phase-complete' && result.nextPhase === 3
           : result.status === 'completed' && result.nextPhase === null;
       if (!valid) throw new ProductApiError('INVALID_RESPONSE');
-      return { ok: true, result: { sessionId: request.sessionId, phase: request.phase, status: result.status as 'phase-complete' | 'completed', nextPhase: result.nextPhase as 2 | 3 | null } };
+      const base = { sessionId: request.sessionId, phase: request.phase, status: result.status as 'phase-complete' | 'completed', nextPhase: result.nextPhase as 2 | 3 | null };
+      return { ok: true, result: last ? { ...base, measurements: readMeasurements(result.measurements) } : base };
     },
   };
 }

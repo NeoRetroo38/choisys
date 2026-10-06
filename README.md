@@ -30,6 +30,12 @@ recibe la credencial del servicio. En un iPhone físico, `127.0.0.1` es el iPhon
 - `packages/core`: workspace neutralizado, sin implementación matemática.
 - Backend privado: `C:\Users\Admin\Documents\Scenarys\backend\neo-cube`.
 
+La persistencia PostgreSQL/Prisma está definida en `apps/api/prisma`. Usa solo
+`accounts`, `profiles` y `cube_data`; almacena resultados ya producidos por C++ y
+no calcula inferencias. La capa de servicios y autorización está preparada, pero
+no se conecta todavía a endpoints públicos hasta disponer de autenticación de
+producto y una instancia PostgreSQL identificada.
+
 El C++ disponible registra selecciones y progresión de tres fases. No contiene
 inferencia o puntuación adicional. El resultado público confirma una fase aceptada
 o una sesión completada; no se inventan interpretaciones.
@@ -38,8 +44,8 @@ o una sesión completada; no se inventan interpretaciones.
 
 Entorno comprobado: Windows, Node 20.19.3, npm 10.8.2, MSYS2 g++ 16.2.0.
 En una copia nueva, `npm ci` instala las versiones de `package-lock.json`. El motor
-privado requiere su backup local por separado. Durante esta tarea no se han
-instalado dependencias nuevas.
+privado requiere su backup local por separado. El workspace de `apps/api` incluye
+Prisma Client y el CLI de Prisma para la persistencia PostgreSQL preparada.
 
 Desde `C:\Users\Admin\daemon.codex`:
 
@@ -47,6 +53,15 @@ Desde `C:\Users\Admin\daemon.codex`:
 npm run build
 npm run check
 npm test
+```
+
+El schema de persistencia se comprueba sin conectar ni migrar una base:
+
+```powershell
+$env:DATABASE_URL = '<URL PostgreSQL provisionada fuera de Git>'
+npm run db:format
+npm run db:validate
+npm run db:generate
 ```
 
 Con el servicio C++ ya iniciado, la prueba opcional usa el cliente real del móvil
@@ -121,6 +136,8 @@ nunca `*`. Esta tarea no habilita Expo web ni instala sus dependencias.
 - `NEO_CUBE_TIMEOUT_MS`: timeout del bridge, por defecto 2000 ms.
 - `EXPO_PUBLIC_API_URL`: URL de la API de producto para el móvil.
 - `CHOISYS_LOCAL_LOG_DIR`: directorio local opcional de logs C++.
+- `DATABASE_URL`: conexión PostgreSQL usada únicamente por `apps/api` y Prisma;
+  debe provisionarse fuera de Git.
 
 Logs C++ por defecto:
 `C:\Users\Admin\Documents\Scenarys\logs\neo-cube\service.log`. Solo timestamp,
@@ -149,6 +166,13 @@ API de producto:
 Fases 1 a 3 y posiciones 1 a 9 sin duplicados. Exactamente una decisión seleccionada
 con valor 1; las no seleccionadas son opcionales, con valor 0. Se rechazan
 propiedades ajenas al contrato.
+
+Al completar la fase 3, `result` incluye además `measurements`: las tres selecciones
+que el motor C++ ya almacena, 1-based y en orden de fase:
+`[{ "phase": 1, "row": 1, "column": 3 }, ...]`. Es el único dato geométrico público.
+La app solo lo dibuja (`CubeView`, `react-native-svg`) y conserva en el dispositivo los
+últimos 5 intentos (un intento = un Run completo) para superponerlos con transparencia;
+no calcula coordenadas, centroides, pesos ni inferencia. Las fases 1 y 2 no lo incluyen.
 
 Resultado: `{ "ok": true, "result": { "sessionId": "<UUID>", "phase": 1,
 "status": "phase-complete", "nextPhase": 2 } }`. Al terminar, `status` es

@@ -5,18 +5,25 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "prebuild": "npm run db:generate",
     "build": "tsc",
     "start": "node dist/index.js",
     "check": "tsc --noEmit",
-    "test": "node --import tsx --test test/api.test.ts"
+    "test": "node --import tsx --test test/api.test.ts test/persistence.test.ts test/auth.test.ts",
+    "db:format": "prisma format --schema prisma/schema.prisma",
+    "db:validate": "prisma validate --schema prisma/schema.prisma",
+    "db:generate": "prisma generate --schema prisma/schema.prisma",
+    "db:migrate": "prisma migrate deploy --schema prisma/schema.prisma"
   },
   "dependencies": {
+    "@prisma/client": "6.12.0",
     "@scenarys/shared": "0.1.0",
     "express": "^5.1.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.3",
     "@types/node": "^24.0.0",
+    "prisma": "6.12.0",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0"
   }

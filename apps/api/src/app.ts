@@ -4,7 +4,14 @@ import { ApiError } from './errors.js';
 import { NeoCubeClient, type CubeClient } from './neoCubeClient.js';
 import { productRoutes } from './routes.js';
 import { SessionService } from './sessionService.js';
-export function createApp(config: ApiConfig, cube: CubeClient = new NeoCubeClient(config.token, config.timeoutMs)) {
+import { authRoutes } from './auth/authRoutes.js';
+import type { AuthService } from './auth/authService.js';
+export interface AppDependencies {
+  auth?: AuthService | null;
+  /** Test harness only. Runtime bootstrap always requires account authentication. */
+  allowUnauthenticatedProduct?: boolean;
+}
+export function createApp(config: ApiConfig, cube: CubeClient = new NeoCubeClient(config.token, config.timeoutMs), dependencies: AppDependencies = {}) {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', false);
@@ -19,9 +26,9 @@ export function createApp(config: ApiConfig, cube: CubeClient = new NeoCubeClien
       if (req.method === 'OPTIONS') {
         const method = req.get('access-control-request-method');
         const headers = (req.get('access-control-request-headers') ?? '').toLowerCase().split(',').map(header => header.trim()).filter(Boolean);
-        if (!method || !['GET', 'POST'].includes(method) || headers.some(header => header !== 'content-type')) return next(new ApiError(403, 'ORIGIN_NOT_ALLOWED'));
+        if (!method || !['GET', 'POST'].includes(method) || headers.some(header => !['content-type', 'authorization'].includes(header))) return next(new ApiError(403, 'ORIGIN_NOT_ALLOWED'));
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
         res.status(204).end();
         return;
       }
@@ -30,7 +37,8 @@ export function createApp(config: ApiConfig, cube: CubeClient = new NeoCubeClien
     next();
   });
   app.use(express.json({ limit: '8kb', strict: true, inflate: false }));
-  app.use(productRoutes(new SessionService(cube)));
+  app.use(authRoutes(dependencies.auth ?? null));
+  app.use(productRoutes(new SessionService(cube), dependencies.auth ?? null, dependencies.allowUnauthenticatedProduct === true));
   app.use((_req, _res, next) => next(new ApiError(404, 'NOT_FOUND')));
   const errors: ErrorRequestHandler = (error: unknown, _req, res, _next) => {
     let safe = error instanceof ApiError ? error : new ApiError(500, 'INTERNAL_ERROR');

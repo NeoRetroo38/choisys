@@ -5,6 +5,7 @@ dist/
 build/
 .expo/
 coverage/
+apps/api/src/generated/prisma/
 *.log
 *.key
 *.pem
