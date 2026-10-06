@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { PanResponder, Platform, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, G, Line, Polyline, Text as SvgText } from 'react-native-svg';
 import type { RunMeasurements } from '../history/runHistory';
@@ -56,23 +56,25 @@ function scaleVec(dir: Vec, amount: number): Vec { return [dir[0] * amount, dir[
 /** Draws the received observations only: x = column, y = row, z = phase. Drag to rotate, tap to reset. */
 export default function CubeView({ runs, size }: CubeViewProps) {
   const [view, setView] = useState(defaultView);
-  const current = useRef(view);
-  current.current = view;
-  const base = useRef(defaultView);
-  const pan = useRef(PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: () => true,
-    onPanResponderGrant: () => { base.current = current.current; },
-    onPanResponderMove: (_event, gesture) => {
-      setView({
-        yaw: base.current.yaw + gesture.dx * dragSpeed,
-        pitch: Math.max(-maxPitch, Math.min(maxPitch, base.current.pitch + gesture.dy * dragSpeed)),
-      });
-    },
-    onPanResponderRelease: (_event, gesture) => {
-      if (Math.abs(gesture.dx) < 4 && Math.abs(gesture.dy) < 4) setView(defaultView);
-    },
-  })).current;
+  // Gesture bookkeeping lives in one stable object that only the gesture handlers touch (no ref reads during render).
+  const [drag] = useState(() => ({ base: defaultView, current: defaultView }));
+  const [pan] = useState(() => {
+    const update = (next: typeof defaultView) => { drag.current = next; setView(next); };
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => { drag.base = drag.current; },
+      onPanResponderMove: (_event, gesture) => {
+        update({
+          yaw: drag.base.yaw + gesture.dx * dragSpeed,
+          pitch: Math.max(-maxPitch, Math.min(maxPitch, drag.base.pitch + gesture.dy * dragSpeed)),
+        });
+      },
+      onPanResponderRelease: (_event, gesture) => {
+        if (Math.abs(gesture.dx) < 4 && Math.abs(gesture.dy) < 4) update(defaultView);
+      },
+    });
+  });
 
   const scale = size * 0.15;
   const center = size / 2;
