@@ -25,6 +25,10 @@ El móvil nunca llama al puerto 8765 ni recibe la credencial del servicio.
    solo al completar la fase 3). La app solo lo **dibuja**; no calcula coordenadas derivadas, centroides,
    conteos, pesos ni interpretaciones. Convertir `phase/row/column` en posiciones SVG (`CubeView`) está
    aprobado: es representación gráfica.
+   **Otro dato público aprobado por el dueño (7 oct):** `phaseTransitions` (`fromPhase`, `toPhase`, `durationMs`),
+   el tiempo entre fases medido por la API. Es observación, no cálculo del Cubo. Si algún día alimenta la
+   inferencia, debe enviarse al motor C++ y no calcularse en TypeScript. Un reintento de una fase ya aceptada
+   debe devolver la misma respuesta y no añadir tiempos.
 5. **Modelo de ejecución:** 3 fases; un Run = un intento completo; cuadrícula 3×3 por fase (cubo 3×3×3).
 6. **El dominio no usa valores negativos como centinelas.** Los estados ausentes son explícitos.
 7. **Roles:** `USER < ADMIN < DEV < SUPERADMIN < SUPERDEV`. Solo USER y SUPERDEV tienen capacidades propias
