@@ -6,9 +6,9 @@ import FadeIn from './FadeIn';
 
 interface CubeViewProps { runs: RunMeasurements[]; size: number }
 
-const green = '#3dff7a';
+const green = '#39ff14';
 // Axes (row, column, phase) are blue so they stand apart from the white cube and the green data.
-const blue = '#4aa3ff';
+const blue = '#12b5ff';
 const mono = Platform.select({ ios: 'Menlo', default: 'monospace' });
 const defaultView = { yaw: Math.PI / 6, pitch: Math.PI / 9 };
 const maxPitch = Math.PI * 0.45;

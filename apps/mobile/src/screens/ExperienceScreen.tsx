@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
   cubeScreen: { flex: 1, backgroundColor: '#000000' },
   cubeBody: { flex: 1, alignItems: 'center' },
   cubeBack: { minHeight: 48, paddingVertical: 15, paddingHorizontal: 24, marginTop: 28 },
-  cubeBackText: { color: '#3dff7a', fontSize: 14, fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }) },
+  cubeBackText: { color: '#39ff14', fontSize: 14, fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }) },
   disabled: { opacity: 0.45 },
   pressed: { opacity: 0.65 },
 });
