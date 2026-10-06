@@ -1,4 +1,4 @@
-import type { EvaluateRequest, EvaluateResponse, Measurement, Phase, Position, StartSessionResponse } from '@scenarys/shared';
+import type { EvaluateRequest, EvaluateResponse, Measurement, Phase, PhaseTransitionTiming, Position, StartSessionResponse } from '@scenarys/shared';
 import type { UiError } from './productApi';
 
 export interface SessionState {
@@ -12,10 +12,12 @@ export interface SessionState {
   notice: string | null;
   /** Observations returned by the engine for the completed run; drawn, never computed. */
   measurements: Measurement[] | null;
+  /** Server-measured time spent between completing a phase and submitting the next. */
+  phaseTransitions: PhaseTransitionTiming[];
 }
 
 export const initialState: SessionState = {
-  screen: 'home', sessionId: null, phase: 1, selected: null, pending: null, busy: false, error: null, notice: null, measurements: null,
+  screen: 'home', sessionId: null, phase: 1, selected: null, pending: null, busy: false, error: null, notice: null, measurements: null, phaseTransitions: [],
 };
 
 type Action =
@@ -38,6 +40,7 @@ export function sessionReducer(state: SessionState, action: Action): SessionStat
       phase: action.result.nextPhase ?? action.result.phase, selected: null, pending: null, busy: false, error: null,
       notice: 'Elección confirmada. Puedes continuar.',
       measurements: action.result.measurements ?? null,
+      phaseTransitions: action.result.phaseTransitions ?? state.phaseTransitions,
     };
     case 'failed': return { ...state, busy: false, error: action.error };
     case 'reset': return state.busy ? state : initialState;

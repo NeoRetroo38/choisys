@@ -1,4 +1,4 @@
-import type { EvaluateRequest, EvaluateResponse, Measurement, StartSessionResponse } from '@scenarys/shared';
+import type { EvaluateRequest, EvaluateResponse, Measurement, PhaseTransitionTiming, StartSessionResponse } from '@scenarys/shared';
 
 export interface UiError { message: string; restart: boolean }
 
@@ -50,6 +50,17 @@ function readMeasurements(value: unknown): Measurement[] {
       throw new ProductApiError('INVALID_RESPONSE');
     }
     return { phase: item.phase as Measurement['phase'], row: item.row as Measurement['row'], column: item.column as Measurement['column'] };
+  });
+}
+
+function readPhaseTransitions(value: unknown, phase: EvaluateRequest['phase']): PhaseTransitionTiming[] {
+  const expectedLength = phase - 1;
+  if (!Array.isArray(value) || value.length !== expectedLength) throw new ProductApiError('INVALID_RESPONSE');
+  return value.map((item, index) => {
+    if (!record(item) || !keys(item, ['fromPhase', 'toPhase', 'durationMs'])
+      || item.fromPhase !== index + 1 || item.toPhase !== index + 2
+      || !Number.isSafeInteger(item.durationMs) || (item.durationMs as number) < 0) throw new ProductApiError('INVALID_RESPONSE');
+    return { fromPhase: item.fromPhase as 1 | 2, toPhase: item.toPhase as 2 | 3, durationMs: item.durationMs as number };
   });
 }
 
@@ -107,13 +118,14 @@ export function createProductClient(baseUrl: string | undefined, transport: type
       if (!record(body) || !keys(body, ['ok', 'result']) || body.ok !== true || !record(body.result)) throw new ProductApiError('INVALID_RESPONSE');
       const result = body.result;
       const last = request.phase === 3;
-      if (!keys(result, last ? ['sessionId', 'phase', 'status', 'nextPhase', 'measurements'] : ['sessionId', 'phase', 'status', 'nextPhase'])
+      if (!keys(result, last ? ['sessionId', 'phase', 'status', 'nextPhase', 'phaseTransitions', 'measurements'] : ['sessionId', 'phase', 'status', 'nextPhase', 'phaseTransitions'])
         || result.sessionId !== request.sessionId || result.phase !== request.phase) throw new ProductApiError('INVALID_RESPONSE');
       const valid = request.phase === 1 ? result.status === 'phase-complete' && result.nextPhase === 2
         : request.phase === 2 ? result.status === 'phase-complete' && result.nextPhase === 3
           : result.status === 'completed' && result.nextPhase === null;
       if (!valid) throw new ProductApiError('INVALID_RESPONSE');
-      const base = { sessionId: request.sessionId, phase: request.phase, status: result.status as 'phase-complete' | 'completed', nextPhase: result.nextPhase as 2 | 3 | null };
+      const base = { sessionId: request.sessionId, phase: request.phase, status: result.status as 'phase-complete' | 'completed', nextPhase: result.nextPhase as 2 | 3 | null,
+        phaseTransitions: readPhaseTransitions(result.phaseTransitions, request.phase) };
       return { ok: true, result: last ? { ...base, measurements: readMeasurements(result.measurements) } : base };
     },
   };

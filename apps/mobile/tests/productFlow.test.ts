@@ -24,6 +24,9 @@ test('selection, loading, three responses and completion use the product API con
     return json({ ok: true, result: {
       sessionId, phase: payload.phase, status: payload.phase === 3 ? 'completed' : 'phase-complete',
       nextPhase: payload.phase === 1 ? 2 : payload.phase === 2 ? 3 : null,
+      phaseTransitions: payload.phase === 1 ? [] : payload.phase === 2
+        ? [{ fromPhase: 1, toPhase: 2, durationMs: 1200 }]
+        : [{ fromPhase: 1, toPhase: 2, durationMs: 1200 }, { fromPhase: 2, toPhase: 3, durationMs: 850 }],
       ...(payload.phase === 3 ? { measurements: [{ phase: 1, row: 2, column: 2 }, { phase: 2, row: 2, column: 2 }, { phase: 3, row: 2, column: 2 }] } : {}),
     } });
   };
@@ -46,6 +49,7 @@ test('selection, loading, three responses and completion use the product API con
   }
   assert.equal(state.screen, 'result');
   assert.deepEqual(state.measurements, [{ phase: 1, row: 2, column: 2 }, { phase: 2, row: 2, column: 2 }, { phase: 3, row: 2, column: 2 }]);
+  assert.deepEqual(state.phaseTransitions, [{ fromPhase: 1, toPhase: 2, durationMs: 1200 }, { fromPhase: 2, toPhase: 3, durationMs: 850 }]);
   assert.deepEqual(paths, ['http://127.0.0.1:3000/sessions', ...Array(3).fill('http://127.0.0.1:3000/evaluate')]);
 });
 
@@ -84,7 +88,8 @@ test('unknown response fields and mismatched phases are rejected without exposin
 
 test('measurements are validated structurally and unexpected fields never reach the UI', async () => {
   const final = { ...request, phase: 3 as Phase };
-  const base = { sessionId, phase: 3, status: 'completed', nextPhase: null };
+  const base = { sessionId, phase: 3, status: 'completed', nextPhase: null,
+    phaseTransitions: [{ fromPhase: 1, toPhase: 2, durationMs: 1200 }, { fromPhase: 2, toPhase: 3, durationMs: 850 }] };
   const good = [{ phase: 1, row: 1, column: 3 }, { phase: 2, row: 2, column: 1 }, { phase: 3, row: 3, column: 2 }];
   const accepted = createProductClient('http://127.0.0.1:3000', async () => json({ ok: true, result: { ...base, measurements: good } }));
   assert.deepEqual((await accepted.evaluate(final)).result.measurements, good);
@@ -94,6 +99,18 @@ test('measurements are validated structurally and unexpected fields never reach 
   }
   const early = createProductClient('http://127.0.0.1:3000', async () => json({ ok: true, result: { sessionId, phase: 1, status: 'phase-complete', nextPhase: 2, measurements: good } }));
   await assert.rejects(early.evaluate(request));
+});
+
+test('phase transition timings are validated before reaching app state', async () => {
+  const base = { sessionId, phase: 2, status: 'phase-complete', nextPhase: 3 };
+  const phaseTwo = { ...request, phase: 2 as Phase };
+  const good = [{ fromPhase: 1, toPhase: 2, durationMs: 1234 }];
+  const accepted = createProductClient('http://127.0.0.1:3000', async () => json({ ok: true, result: { ...base, phaseTransitions: good } }));
+  assert.deepEqual((await accepted.evaluate(phaseTwo)).result.phaseTransitions, good);
+  for (const phaseTransitions of [undefined, [], [{ ...good[0], durationMs: -1 }], [{ ...good[0], durationMs: 1.5 }], [{ ...good[0], internal: true }]]) {
+    const client = createProductClient('http://127.0.0.1:3000', async () => json({ ok: true, result: { ...base, phaseTransitions } }));
+    await assert.rejects(client.evaluate(phaseTwo));
+  }
 });
 
 test('expired session asks for restart using controlled text', async () => {
