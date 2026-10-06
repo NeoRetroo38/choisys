@@ -3,12 +3,16 @@ import { readConfig } from './config.js';
 import { createDatabaseClient, requireDatabaseUrl } from './database.js';
 import { AuthService } from './auth/authService.js';
 import { PrismaAuthRepository } from './auth/authRepository.js';
+import { DevMemoryAuthRepository } from './auth/devMemoryRepository.js';
 
 try {
   const config = readConfig();
   const database = process.env.DATABASE_URL ? createDatabaseClient(requireDatabaseUrl()) : null;
-  const auth = database ? new AuthService(new PrismaAuthRepository(database)) : null;
-  if (!auth) console.warn('Account service unavailable: configure DATABASE_URL and apply database migrations.');
+  const devMemory = !database && process.env.CHOISYS_DEV_MEMORY_AUTH === '1';
+  const auth = database ? new AuthService(new PrismaAuthRepository(database))
+    : devMemory ? new AuthService(new DevMemoryAuthRepository()) : null;
+  if (devMemory) console.warn('DEV ONLY: accounts are kept in memory and lost on restart.');
+  else if (!auth) console.warn('Account service unavailable: configure DATABASE_URL and apply database migrations.');
   const server = createApp(config, undefined, { auth }).listen(config.port, config.host, () => {
     console.log(`choisys-api listening on http://${config.host}:${config.port}`);
   });
