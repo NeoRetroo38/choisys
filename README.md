@@ -117,6 +117,9 @@ $env:EXPO_PUBLIC_API_URL = 'http://<IPv4-privada-del-PC>:3000'
 npm run mobile -- --lan
 ```
 
+Atajo para ver la web desde Safari en el iPhone (misma red privada, HTTP sin cifrar):
+`.\scripts\dev-lan.ps1` arranca C++, API y Expo web y muestra la URL; `-DryRun` solo la muestra.
+
 Abrir el QR en Expo Go compatible con SDK 57. Reiniciar Metro al cambiar la URL.
 La red y el firewall existentes deben permitir API y Metro desde el iPhone; los
 scripts no abren reglas de firewall. En el mismo PC se puede configurar
