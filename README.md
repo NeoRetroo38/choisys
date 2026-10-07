@@ -1,8 +1,9 @@
 # choisys — scenarys S.L.
 
-El Cubo de Neo se ejecuta exclusivamente en C++ y en el PC local. Este repositorio
-público contiene UI, contratos y bridge. El motor y sus backups viven fuera del
-repositorio: no copiarlos a TypeScript, frontend ni cloud.
+El Cubo de Neo se ejecuta exclusivamente en C++ y de forma local. Su código está
+publicado en el repositorio separado [`NeoRetroo38/neos-cube`](https://github.com/NeoRetroo38/neos-cube).
+Este repositorio público contiene UI, contratos y bridge; no duplica la lógica del
+motor en TypeScript, frontend ni cloud. Las credenciales y los backups siguen siendo locales.
 
 ## Arquitectura
 
@@ -28,7 +29,8 @@ recibe la credencial del servicio. En un iPhone físico, `127.0.0.1` es el iPhon
   dedicado. Filtra respuestas; no reproduce cálculos.
 - `packages/shared`: contratos públicos de entrada/salida y códigos de error.
 - `packages/core`: workspace neutralizado, sin implementación matemática.
-- Backend privado: `C:\Users\Admin\Documents\Scenarys\backend\neo-cube`.
+- Repositorio público del Cubo: `https://github.com/NeoRetroo38/neos-cube`.
+  Checkout local habitual: `C:\Users\Admin\Documents\Scenarys\backend\neo-cube`.
 
 La persistencia PostgreSQL/Prisma está definida en `apps/api/prisma`. El schema tiene
 siete tablas: `accounts`, `account_sessions`, `profiles`, `cube_data`, `permissions`,
@@ -59,7 +61,7 @@ o una sesión completada; no se inventan interpretaciones.
 
 Entorno comprobado: Windows, Node 20.19.3, npm 10.8.2, MSYS2 g++ 16.2.0.
 En una copia nueva, `npm ci` instala las versiones de `package-lock.json`. El motor
-privado requiere su backup local por separado. El workspace de `apps/api` incluye
+público se obtiene desde su repositorio separado. El workspace de `apps/api` incluye
 Prisma Client y el CLI de Prisma para la persistencia PostgreSQL preparada.
 
 Desde `C:\Users\Admin\daemon.codex`:
@@ -95,7 +97,7 @@ node --env-file=C:\Users\Admin\daemon.codex.env.local --import tsx scripts/test-
 
 El build usa `-std=c++17 -Wall -Wextra -Wpedantic -static` y `-lws2_32`, sin
 CMake/Ninja ni GUI. Genera `build\neo-cube-service.exe`. Los targets opcionales
-`console` y `gui` reproducen los prototipos locales. El README privado incluye el
+`console` y `gui` reproducen los prototipos locales. El README del motor incluye el
 comando expandido y los smoke tests.
 
 El launcher usa `CHOISYS_LOCAL_API_TOKEN` del entorno o del archivo externo
@@ -199,7 +201,7 @@ completa una fase hasta que se envía la siguiente, por ejemplo
 `{ "fromPhase": 1, "toPhase": 2, "durationMs": 1250 }`. Al terminar, `status` es
 `completed` y `nextPhase` es `null`. No incluye datos internos del motor.
 
-C++ privado: `GET /health` y `POST /evaluate`, ambos con
+Servicio C++ local: `GET /health` y `POST /evaluate`, ambos con
 `Authorization: Bearer <secreto-local>`. Health devuelve
 `{ "ok": true, "service": "neo-cube", "version": "0.1.0" }`.
 
