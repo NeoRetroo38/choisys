@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { AuthProvider, useAuth } from '../auth/AuthProvider';
+import WelcomeScreen from '../screens/WelcomeScreen';
 
 function AuthenticatedRoutes() {
   const { controller, state } = useAuth();
@@ -25,6 +27,8 @@ function AuthenticatedRoutes() {
 }
 
 export default function RootLayout() {
+  const [welcomed, setWelcomed] = useState(false);
+  if (!welcomed) return <><StatusBar style="light" /><WelcomeScreen onContinue={() => setWelcomed(true)} /></>;
   return <AuthProvider><StatusBar style="dark" /><AuthenticatedRoutes /></AuthProvider>;
 }
 const styles = StyleSheet.create({
