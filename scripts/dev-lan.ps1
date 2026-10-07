@@ -50,7 +50,7 @@ if (-not $env:DATABASE_URL) { $env:CHOISYS_DEV_MEMORY_AUTH = '1' }
 Start-Process powershell -WorkingDirectory $root -WindowStyle Normal -ArgumentList '-NoExit', '-File', "`"$root\apps\api\run.ps1`"", '-Mode', 'dev'
 
 $env:EXPO_PUBLIC_API_URL = $apiUrl
-Start-Process powershell -WorkingDirectory $root -WindowStyle Normal -ArgumentList '-NoExit', '-Command', "npm run mobile -- --web --lan --port $WebPort"
+Start-Process powershell -WorkingDirectory $root -WindowStyle Normal -ArgumentList '-NoExit', '-Command', "npm --workspace apps/mobile run start -- --web --lan --port $WebPort"
 
 Write-Host "Listo. En el iPhone (misma red Wi-Fi), abre en Safari: $webOrigin"
 Write-Host 'Para parar: cierra las tres ventanas. El tráfico es HTTP sin cifrar: usa solo una red de confianza.'
