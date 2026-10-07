@@ -29,5 +29,8 @@ function Start-Watcher {
 }
 if ((Test-Port 8081) -and (Test-Port 3000) -and (Test-Port 8765)) { Write-Host 'Ya esta todo en marcha.'; Start-Watcher; return }
 if ((Test-Port 8081) -or (Test-Port 3000) -or (Test-Port 8765)) { Write-Host 'Hay servicios a medias: no arranco nada para no pisarlos. Cierralos y vuelve a ejecutar.'; return }
+$root = Split-Path -Parent $PSScriptRoot
+# La API no arranca sin el cliente de la base de datos generado (npm ci --ignore-scripts no lo genera).
+if (-not (Test-Path (Join-Path $root 'node_modules\.prisma\client\index.js'))) { Push-Location $root; npm run db:generate --workspace apps/api | Out-Null; Pop-Location }
 & (Join-Path $PSScriptRoot 'dev-lan.ps1')
 Start-Watcher
