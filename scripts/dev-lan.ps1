@@ -34,6 +34,7 @@ $apiUrl = "http://${Address}:$ApiPort"
 Write-Host "IPv4 del PC:  $Address"
 Write-Host "API:          $apiUrl  (solo esa interfaz)"
 Write-Host "Safari:       $webOrigin"
+if (-not $env:DATABASE_URL) { Write-Host 'Cuentas:      EN MEMORIA (CHOISYS_DEV_MEMORY_AUTH=1): puedes registrarte en Safari, pero se pierden al reiniciar la API.' }
 if ($DryRun) { Write-Host 'DryRun: no se arranca nada.'; return }
 
 if (-not $SkipEngine) {
@@ -44,6 +45,8 @@ if (-not $SkipEngine) {
 $env:API_HOST = $Address
 $env:PORT = "$ApiPort"
 $env:API_ALLOWED_ORIGINS = $webOrigin
+# Sin PostgreSQL no hay servicio de cuentas: se usan cuentas en memoria (solo desarrollo; se pierden al reiniciar la API).
+if (-not $env:DATABASE_URL) { $env:CHOISYS_DEV_MEMORY_AUTH = '1' }
 Start-Process powershell -WorkingDirectory $root -WindowStyle Normal -ArgumentList '-NoExit', '-File', "`"$root\apps\api\run.ps1`"", '-Mode', 'dev'
 
 $env:EXPO_PUBLIC_API_URL = $apiUrl
