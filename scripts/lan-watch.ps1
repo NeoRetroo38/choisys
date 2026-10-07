@@ -32,7 +32,7 @@ function Update-Once {
     Write-Host ("main avanzo: {0} -> {1} ({2} archivos)" -f $head.Substring(0, 7), $main.Substring(0, 7), @($changed).Count)
     if ($DryRun) { return $false }
     Invoke-Git merge --ff-only origin/main | Out-Null
-    if ($changed -match '^package-lock\.json$|/package\.json$') { npm ci --ignore-scripts --no-audit --no-fund | Out-Null }
+    if ($changed -match '^package-lock\.json$|/package\.json$') { npm ci --ignore-scripts --no-audit --no-fund | Out-Null; npm run db:generate --workspace apps/api | Out-Null }
     if ($changed -match '^apps/api/|^packages/|^package-lock\.json$') {
         Write-Host 'Cambia la API o las dependencias: reinicio los servicios de este directorio.'
         Stop-LanFromThisWorktree
