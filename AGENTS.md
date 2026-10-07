@@ -1,8 +1,9 @@
 # choisys — guía para agentes (Codex, Claude y cualquier otro)
 
 choisys (siempre en minúsculas) es el producto de scenarys S.L. Este repositorio es **público**:
-contiene UI, contratos y el puente hacia el motor. El motor (Cubo de Neo) es **privado**, está
-en C++ y vive fuera de este repo. Lee también `README.md` y `apps/mobile/AGENTS.md` (reglas de Expo).
+contiene UI, contratos y el puente hacia el motor. El motor (Cubo de Neo) también está en un
+**repositorio público separado**, `NeoRetroo38/neos-cube`; está escrito en C++ y se ejecuta de
+forma local. Lee también `README.md` y `apps/mobile/AGENTS.md` (reglas de Expo).
 
 ## Arquitectura (no se reconstruye)
 
@@ -46,7 +47,8 @@ El móvil nunca llama al puerto 8765 ni recibe la credencial del servicio.
 
 - No versiones secretos. El token del servicio local está en `C:\Users\Admin\daemon.codex.env.local`, fuera
   del repo. No lo imprimas, no lo copies y no lo pongas en `EXPO_PUBLIC_*`, bundles, logs ni documentación.
-- No copies código, binarios ni archivos del motor privado a este repo.
+- No dupliques código, binarios ni archivos del motor en este repo; su fuente pública se mantiene
+  en `NeoRetroo38/neos-cube` y choisys solo consume su contrato.
 - Antes de proponer un push: `npm run check:public` y revisa `git diff` en busca de secretos o lógica del Cubo.
 
 ## Git (importante)
