@@ -30,11 +30,26 @@ recibe la credencial del servicio. En un iPhone físico, `127.0.0.1` es el iPhon
 - `packages/core`: workspace neutralizado, sin implementación matemática.
 - Backend privado: `C:\Users\Admin\Documents\Scenarys\backend\neo-cube`.
 
-La persistencia PostgreSQL/Prisma está definida en `apps/api/prisma`. Usa solo
-`accounts`, `profiles` y `cube_data`; almacena resultados ya producidos por C++ y
-no calcula inferencias. La capa de servicios y autorización está preparada, pero
-no se conecta todavía a endpoints públicos hasta disponer de autenticación de
-producto y una instancia PostgreSQL identificada.
+La persistencia PostgreSQL/Prisma está definida en `apps/api/prisma`. El schema tiene
+siete tablas: `accounts`, `account_sessions`, `profiles`, `cube_data`, `permissions`,
+`role_permissions` y `role_changes`; almacena resultados ya producidos por C++ y no
+calcula inferencias. Existe una migración inicial revisada
+(`apps/api/prisma/migrations/20261006000000_initial`) que **no se ha aplicado a ninguna
+base de datos**: todavía no hay una instancia PostgreSQL identificada.
+
+La API ya tiene autenticación de producto (`/auth/register`, `/auth/login`, `/auth/me` y
+`/auth/logout`). Sin `DATABASE_URL` el servicio de cuentas no está disponible; solo para
+desarrollo, `CHOISYS_DEV_MEMORY_AUTH=1` usa cuentas en memoria. Los endpoints públicos de
+perfil, historial y administración no existen todavía.
+
+Con la migración aplicada, `npm run db:seed --workspace apps/api` carga el catálogo de
+permisos y las asignaciones por rol (se puede repetir sin efectos). Después, para asignar el
+primer SUPERDEV (una sola vez, en local, con `DATABASE_URL` en el entorno y una cuenta ya
+registrada) y dejarlo registrado en `role_changes`:
+
+```powershell
+npm run bootstrap:superdev --workspace apps/api -- <email> --confirm
+```
 
 El C++ disponible registra selecciones y progresión de tres fases. No contiene
 inferencia o puntuación adicional. El resultado público confirma una fase aceptada
@@ -114,7 +129,7 @@ En otra terminal:
 ```powershell
 Set-Location 'C:\Users\Admin\daemon.codex'
 $env:EXPO_PUBLIC_API_URL = 'http://<IPv4-privada-del-PC>:3000'
-npm run mobile -- --lan
+npm --workspace apps/mobile run start -- --lan
 ```
 
 Atajo para ver la web desde Safari en el iPhone (misma red privada, HTTP sin cifrar):
@@ -199,10 +214,10 @@ nueva. Ambos procesos mantienen sesiones acotadas en memoria, sin persistencia.
 
 ## Seguridad, alcance y pendientes
 
-- El UUID de sesión es una capacidad efímera de desarrollo. No hay autenticación
-  de usuarios de producto ni cuotas por usuario. Usar LAN solo en una red de
-  desarrollo confiable. Autenticación de producto y transporte cifrado pendientes
-  antes de un despliegue multiusuario.
+- El UUID de sesión es una capacidad efímera de desarrollo. La autenticación de
+  producto existe, pero no hay cuotas por usuario. Usar LAN solo en una red de
+  desarrollo confiable. Transporte cifrado y cuotas pendientes antes de un
+  despliegue multiusuario.
 - C++ solo admite IPv4 loopback, token local, requests acotadas y deadlines.
   Procesa conexiones secuencialmente. Rotación de logs pendiente para uso prolongado.
 - `.gitignore` y `npm run check:public` revisan el árbol actual y patrones conocidos
