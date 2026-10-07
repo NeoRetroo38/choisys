@@ -23,6 +23,11 @@ if ($Install) {
 }
 
 function Test-Port([int]$port) { [bool](Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue) }
-if ((Test-Port 8081) -and (Test-Port 3000) -and (Test-Port 8765)) { Write-Host 'Ya esta todo en marcha.'; return }
-if (Test-Port 8081 -or Test-Port 3000 -or Test-Port 8765) { Write-Host 'Hay servicios a medias: no arranco nada para no pisarlos. Cierralos y vuelve a ejecutar.'; return }
+function Start-Watcher {
+    $running = Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*lan-watch.ps1*' -and $_.Name -eq 'powershell.exe' }
+    if (-not $running) { Start-Process powershell -WindowStyle Hidden -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSScriptRoot\lan-watch.ps1`"" }
+}
+if ((Test-Port 8081) -and (Test-Port 3000) -and (Test-Port 8765)) { Write-Host 'Ya esta todo en marcha.'; Start-Watcher; return }
+if ((Test-Port 8081) -or (Test-Port 3000) -or (Test-Port 8765)) { Write-Host 'Hay servicios a medias: no arranco nada para no pisarlos. Cierralos y vuelve a ejecutar.'; return }
 & (Join-Path $PSScriptRoot 'dev-lan.ps1')
+Start-Watcher
