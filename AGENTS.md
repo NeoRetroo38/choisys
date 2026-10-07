@@ -59,6 +59,25 @@ El móvil nunca llama al puerto 8765 ni recibe la credencial del servicio.
 - **Nunca** `push --force`, reescribir historia de `origin` ni hacer `push` sin permiso.
 - Mensajes de commit en inglés, formato `tipo(ámbito): resumen`.
 
+### Revisión del dueño desde GitHub Mobile (iPhone)
+
+El dueño fusiona **desde la app de GitHub en el iPhone**. Todo commit debe llegarle ahí como PR; si no
+aparece en su app, no existe.
+
+- **Todo cambio es un PR.** Sin commits sueltos en ramas sin PR. Empuja la rama y abre el PR al terminar
+  cada unidad de trabajo, no al final del día. Un PR pequeño y enfocado se revisa bien en el móvil.
+- **Que le aparezca:** el dueño es el autor de los PR, así que GitHub no permite pedirle revisión
+  (`--reviewer` falla con 422) ni avisa por mencionarse a sí mismo. Usa `--assignee NeoRetroo38` para que
+  salga en sus asignados, y cuando esté verificado ponle la etiqueta `listo-para-fusionar`.
+- **Listo para fusionar:** abre el PR como *ready for review*. Usa *draft* solo si de verdad no está
+  terminado, y márcalo *ready* en cuanto lo esté.
+- **Usa toda la plataforma:** enlaza el issue (`Closes #n`), etiquetas (`agent:*`, `P0-P2`, `area:*`),
+  milestone, y deja visibles los checks de CI. Los PR relacionados se enlazan entre sí.
+- **Descripción legible en pantalla pequeña:** título corto; el cuerpo empieza con `## Para el dueño`
+  (2 líneas) y después *Qué*, *Por qué*, *Cómo se probó* y *Riesgo*, en pocas líneas, sin AI attribution.
+- **Revisión cruzada:** deja comentarios de revisión en los PR del otro agente cuando los toques.
+- **Fusionar es solo del dueño.** No fusiones ni actives auto-merge; él pulsa *Merge* en el móvil.
+
 ## Comandos
 
 ```powershell
