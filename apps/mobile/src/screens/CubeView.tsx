@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { PanResponder, Platform, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, G, Line, Polyline, Text as SvgText } from 'react-native-svg';
 import type { RunMeasurements } from '../history/runHistory';
@@ -26,6 +26,21 @@ function makeProjector(yaw: number, pitch: number, scale: number, center: number
     return [center + rx * scale, center + ry * scale];
   };
 }
+
+// Depth cue: edges toward the viewer are drawn a little brighter than the ones behind. Rendering only.
+const maxDepth = 3.5;
+function makeDepthFade(yaw: number, pitch: number) {
+  const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+  return (from: Vec, to: Vec): number => {
+    const depth = (([x, y, z]: Vec) => y * sp + (x * sy + z * cy) * cp);
+    const middle = (depth(from) + depth(to)) / 2;
+    return 0.5 + 0.5 * Math.max(0, Math.min(1, (middle + maxDepth) / (2 * maxDepth)));
+  };
+}
+
+// After a drag the cube keeps turning and slows down by itself (about one second).
+const inertiaDecay = 0.93;
+const inertiaStop = 0.0004;
 
 // Two separate elements, drawn only as edges:
 // - the outer cube: a plain box at +/-2 that frames the whole view;
@@ -57,13 +72,27 @@ function scaleVec(dir: Vec, amount: number): Vec { return [dir[0] * amount, dir[
 export default function CubeView({ runs, size }: CubeViewProps) {
   const [view, setView] = useState(defaultView);
   // Gesture bookkeeping lives in one stable object that only the gesture handlers touch (no ref reads during render).
-  const [drag] = useState(() => ({ base: defaultView, current: defaultView }));
+  const [drag] = useState(() => ({ base: defaultView, current: defaultView, frame: 0 }));
+  const clampPitch = (pitch: number) => Math.max(-maxPitch, Math.min(maxPitch, pitch));
+  // Stop the inertia animation when the view goes away.
+  useEffect(() => () => { if (drag.frame) cancelAnimationFrame(drag.frame); }, [drag]);
   const [pan] = useState(() => {
     const update = (next: typeof defaultView) => { drag.current = next; setView(next); };
+    const stop = () => { if (drag.frame) { cancelAnimationFrame(drag.frame); drag.frame = 0; } };
+    const coast = (yawSpeed: number, pitchSpeed: number) => {
+      const step = () => {
+        yawSpeed *= inertiaDecay;
+        pitchSpeed *= inertiaDecay;
+        if (Math.abs(yawSpeed) + Math.abs(pitchSpeed) < inertiaStop) { drag.frame = 0; return; }
+        update({ yaw: drag.current.yaw + yawSpeed, pitch: clampPitch(drag.current.pitch + pitchSpeed) });
+        drag.frame = requestAnimationFrame(step);
+      };
+      drag.frame = requestAnimationFrame(step);
+    };
     return PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => { drag.base = drag.current; },
+      onPanResponderGrant: () => { stop(); drag.base = drag.current; },
       onPanResponderMove: (_event, gesture) => {
         update({
           yaw: drag.base.yaw + gesture.dx * dragSpeed,
@@ -71,7 +100,8 @@ export default function CubeView({ runs, size }: CubeViewProps) {
         });
       },
       onPanResponderRelease: (_event, gesture) => {
-        if (Math.abs(gesture.dx) < 4 && Math.abs(gesture.dy) < 4) update(defaultView);
+        if (Math.abs(gesture.dx) < 4 && Math.abs(gesture.dy) < 4) { update(defaultView); return; }
+        coast(gesture.vx * 16 * dragSpeed, gesture.vy * 16 * dragSpeed);
       },
     });
   });
@@ -79,6 +109,7 @@ export default function CubeView({ runs, size }: CubeViewProps) {
   const scale = size * 0.15;
   const center = size / 2;
   const project = makeProjector(view.yaw, view.pitch, scale, center);
+  const fade = makeDepthFade(view.yaw, view.pitch);
   const point = (row: number, column: number, phase: number) => project([(column - 2) * gridStep, (row - 2) * gridStep, (phase - 2) * gridStep]);
 
   const zTip = project(scaleVec([0, 0, 1], axisReach));
@@ -96,12 +127,12 @@ export default function CubeView({ runs, size }: CubeViewProps) {
           {outerEdges.map(([from, to], index) => {
             const [x1, y1] = project(from);
             const [x2, y2] = project(to);
-            return <Line key={`o${index}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#ffffff" strokeOpacity={0.4} strokeWidth={1.4} />;
+            return <Line key={`o${index}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#ffffff" strokeOpacity={0.4 * fade(from, to)} strokeWidth={1.4} />;
           })}
           {gridEdges.map(([from, to], index) => {
             const [x1, y1] = project(from);
             const [x2, y2] = project(to);
-            return <Line key={`g${index}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#ffffff" strokeOpacity={0.55} strokeWidth={0.9} />;
+            return <Line key={`g${index}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#ffffff" strokeOpacity={0.55 * fade(from, to)} strokeWidth={0.9} />;
           })}
 
           {axes.map(axis => {
