@@ -1,5 +1,7 @@
 # BORRADOR, NO ACTIVO. Vive en docs/ a propósito: subir archivos a .github/workflows exige el permiso `workflow`
 # del token de gh (decisión pendiente del dueño). Para activarlo: moverlo a .github/workflows/claude-agent.yml.
+# NO ACTIVAR antes de proteger `main` (rama protegida: PR obligatorio, sin push directo), porque el agente tiene
+# permiso de escritura en el repositorio.
 # NO VERIFICADO: nunca se ha ejecutado; revisar la versión y los parámetros de la acción antes de activarlo.
 #
 # Qué hace: cuando el dueño comenta "@claude <encargo>" en una issue o PR, arranca un agente de Claude en GitHub.
@@ -20,8 +22,11 @@ permissions:
 jobs:
   agent:
     # Solo el dueño del repositorio y solo si el comentario menciona a @claude.
+    # Los agentes comentan con la cuenta del dueño y firman con "[Claude 2]", "[Codex]"...: los comentarios que
+    # empiezan por "[" se ignoran para que un comentario de un agente nunca relance el agente en bucle.
     if: >-
       github.event.comment.author_association == 'OWNER' &&
+      !startsWith(github.event.comment.body, '[') &&
       contains(github.event.comment.body, '@claude')
     runs-on: ubuntu-latest
     timeout-minutes: 30
