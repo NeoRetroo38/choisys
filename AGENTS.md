@@ -101,6 +101,29 @@ la UI, comprobada en el navegador o en dispositivo. Informa de lo que **no** pud
 PostgreSQL real y migraciones (no hay instancia identificada), inferencia, integración Wibaruim (sin
 especificación) y despliegue en producción.
 
+## Comunicación con el dueño (solo GitHub)
+
+El dueño solo lee **GitHub** (app del iPhone). **Nada se le pide ni se le cuenta por otro canal.** En un chat se
+responde, como mucho, con una frase que remita a GitHub. Está pensado para leer poco y rápido:
+
+- **Dónde:** una decisión es una issue con las etiquetas `decisión` y `esperando-dueño`; el resumen de un cambio
+  va en `## Para el dueño` del PR; los avisos de estado, en un comentario de la issue o del PR.
+- **Una pregunta por comentario**, con título numerado en negrita (`**1. ¿Qué Postgres?**`), tu recomendación,
+  las opciones con coste, tiempo y riesgo en una línea, y **qué pasa si no decide**. Plantilla:
+  `.github/ISSUE_TEMPLATE/decision.md`.
+- **Se responde con una reacción**, no escribiendo: 👍 la recomendada · 🚀 la alternativa · 🎉 una tercera ·
+  👎 no · 👀 explícamelo antes de decidir.
+- **Firma tus comentarios** con `[Claude]`, `[Codex]` o `[Agente <nombre>]` al principio. Todos actuamos con la
+  cuenta del dueño; la firma permite distinguir sus respuestas de las nuestras.
+- **Brevedad:** lo importante primero, como mucho 8 líneas, sin jerga y sin pegar código ni registros.
+- **Estados con etiquetas:** `esperando-dueño`, `listo-para-fusionar` y `bloquea-lanzamiento`. Asigna al dueño
+  lo que le toca, para que salga en *Asignadas* de su app.
+- **Cómo leer su respuesta:** `node scripts/watch-owner.mjs --repo OWNER/REPO --issue N` (una línea por reacción
+  o comentario nuevo) o `--summary` (cada pregunta con su respuesta).
+- **Acciones en el PC:** agrúpalas en una sola issue "En el PC (cuando puedas)"; no las pidas por otro canal.
+- **Límite real:** GitHub no avisa al dueño de lo que hacemos con su cuenta (ni por asignación ni por mención).
+  Hasta que exista una Action que comente como bot, tiene que abrir *Asignadas*: mantén las etiquetas al día.
+
 ## Coordinación entre agentes (Git)
 
 Varios agentes pueden trabajar a la vez. Git es el canal de coordinación:
