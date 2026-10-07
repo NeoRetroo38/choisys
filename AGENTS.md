@@ -91,6 +91,9 @@ npm run mobile         # Expo (usa EXPO_PUBLIC_API_URL)
 Desarrollo local sin PostgreSQL: arranca la API con `CHOISYS_DEV_MEMORY_AUTH=1` (cuentas en memoria, se
 pierden al reiniciar; solo desarrollo). Detalles de arranque, puertos y variables en `README.md`.
 
+La migración inicial de PostgreSQL (`apps/api/prisma/migrations`) está revisada pero **no se ha aplicado a ninguna base**.
+Primer SUPERDEV (una vez, en local): `npm run bootstrap:superdev --workspace apps/api -- <email> --confirm`.
+
 ## Definición de terminado
 
 `npm run check` y `npm test` en verde, `npm run check:public` correcto, sin secretos en el diff, y si tocaste
