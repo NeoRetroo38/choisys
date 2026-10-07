@@ -114,7 +114,7 @@ En otra terminal:
 ```powershell
 Set-Location 'C:\Users\Admin\daemon.codex'
 $env:EXPO_PUBLIC_API_URL = 'http://<IPv4-privada-del-PC>:3000'
-npm run mobile -- --lan
+npm --workspace apps/mobile run start -- --lan
 ```
 
 Atajo para ver la web desde Safari en el iPhone (misma red privada, HTTP sin cifrar):
