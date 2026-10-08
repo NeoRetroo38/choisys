@@ -73,6 +73,7 @@ if (!flag('--no-web')) {
 if (!check) {
   console.log('Arrancando motor, API y web…');
   console.log(`  Web:  http://localhost:${webPort}${lan ? `   (en el móvil, misma Wi-Fi: http://${host}:${webPort})` : ''}`);
+  console.log(`  En directo (Safari, solo sudev): http://${host}:${apiPort}/live`);
   console.log(databaseUrl ? '  Cuentas: en la base de datos (DATABASE_URL).' : '  Cuentas: EN MEMORIA (solo desarrollo; se pierden al reiniciar la API).');
   console.log('  Para parar: Ctrl+C. HTTP sin cifrar: usa solo una red de confianza.');
 }

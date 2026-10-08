@@ -4,6 +4,7 @@ import type { AuthActor } from '../authorization.js';
 import { ApiError } from '../errors.js';
 import type { AuthRepository, AuthSessionRecord, NewAuthSession } from './authRepository.js';
 import { hashPassword, verifyPassword } from './password.js';
+import type { Seen } from '../connections.js';
 
 export const AUTH_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
@@ -37,7 +38,7 @@ export interface AuthenticatedSession { actor: AuthActor; response: AuthMeRespon
 export class AuthService {
   private readonly attempts = new Map<string, { count: number; expiresAt: number }>();
   private pendingHashes = 0;
-  constructor(private readonly repository: AuthRepository, private readonly now: () => number = Date.now) {}
+  constructor(private readonly repository: AuthRepository, private readonly now: () => number = Date.now, private readonly onSeen?: (seen: Seen) => void) {}
 
   private throttle(ip: string, email: string): void {
     const now = this.now();
@@ -115,6 +116,7 @@ export class AuthService {
     const record = await this.stored(() => this.repository.authenticate(hash, new Date(now), new Date(now + AUTH_SESSION_TTL_MS)));
     if (!record) throw new ApiError(401, 'AUTH_REQUIRED');
     const response = this.publicSession(record);
+    this.onSeen?.({ sessionKey: hash.slice(0, 8), profileId: response.profile.id, displayName: response.profile.displayName, role: record.account.profile!.role });
     return { actor: { profileId: response.profile.id, role: record.account.profile!.role }, response };
   }
 

@@ -76,6 +76,12 @@ export interface DeleteMeResponse { ok: true }
 /** SUPERDEV only. */
 export interface AdminProfileRow extends MeProfile { disabled: boolean; runCount: number }
 export interface AdminProfilesResponse { ok: true; profiles: AdminProfileRow[] }
+/** One signed-in client seen recently (SUPERDEV view). Short session key, never the token. */
+export interface ConnectionRow {
+  id: string; profileId: string; displayName: string; role: Role;
+  device: string; address: string; since: string; lastSeen: string; requests: number; active: boolean;
+}
+export interface ConnectionsResponse { ok: true; connections: ConnectionRow[] }
 export interface AssignRoleRequest { role: Role; reason?: string }
 export interface DisableProfileRequest { disabled: boolean }
 export interface AdminProfileResponse { ok: true; profile: AdminProfileRow }
