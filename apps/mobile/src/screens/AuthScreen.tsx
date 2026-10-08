@@ -4,21 +4,25 @@ import {
   StyleSheet, Text, TextInput, View, useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import RoleChoice, { type RoleOption } from '../ui/RoleChoice';
 
 interface AuthScreenProps {
   mode: 'login' | 'register';
   busy: boolean;
   error: string | null;
-  onSubmit: (input: { email: string; password: string; displayName: string }) => void;
+  onSubmit: (input: { email: string; password: string; displayName: string; requestedRole?: string }) => void;
   onModeChange: () => void;
+  /** Account types offered at sign-up; the first one is the default (plain user). Absent: no choice shown. */
+  roleOptions?: RoleOption[];
 }
 
-export default function AuthScreen({ mode, busy, error, onSubmit, onModeChange }: AuthScreenProps) {
+export default function AuthScreen({ mode, busy, error, onSubmit, onModeChange, roleOptions }: AuthScreenProps) {
   const { height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [requestedRole, setRequestedRole] = useState(roleOptions?.[0]?.value);
   const [validationError, setValidationError] = useState<string | null>(null);
   const emailInput = useRef<TextInput>(null);
   const passwordInput = useRef<TextInput>(null);
@@ -39,7 +43,8 @@ export default function AuthScreen({ mode, busy, error, onSubmit, onModeChange }
       return;
     }
     setValidationError(null);
-    onSubmit({ email: email.trim(), password, displayName: displayName.trim() });
+    onSubmit({ email: email.trim(), password, displayName: displayName.trim(),
+      ...(register && requestedRole && requestedRole !== roleOptions?.[0]?.value ? { requestedRole } : {}) });
   }
 
   return (
@@ -92,6 +97,14 @@ export default function AuthScreen({ mode, busy, error, onSubmit, onModeChange }
               returnKeyType="go" onSubmitEditing={submit} maxLength={128} />
           </View>
 
+          {register && roleOptions && roleOptions.length > 1 && <View style={styles.field}>
+            <Text style={styles.label}>Tipo de cuenta</Text>
+            <RoleChoice options={roleOptions} value={requestedRole} onChange={setRequestedRole} disabled={busy} />
+            {requestedRole !== roleOptions[0].value && <Text style={styles.roleHint}>
+              Entras como usuario. Un sudev revisará tu solicitud y lo verás en «tú».
+            </Text>}
+          </View>}
+
           {(validationError || error) && <Text accessibilityRole="alert" accessibilityLiveRegion="polite"
             style={styles.error}>{validationError || error}</Text>}
 
@@ -133,6 +146,7 @@ const styles = StyleSheet.create({
   switchMode: { minHeight: 48, paddingVertical: 16, alignItems: 'center', justifyContent: 'center', marginTop: 13 },
   switchText: { color: '#666666', fontSize: 13, lineHeight: 21, textAlign: 'center' },
   switchLink: { color: '#000000', textDecorationLine: 'underline' },
+  roleHint: { marginTop: 10, color: '#666666', fontSize: 12, lineHeight: 18 },
   disabled: { opacity: 0.5 },
   pressed: { opacity: 0.65 },
 });
