@@ -6,6 +6,7 @@ import { PrismaAuthRepository } from './auth/authRepository.js';
 import { DevMemoryAuthRepository } from './auth/devMemoryRepository.js';
 import { PrismaRunRecorder } from './services/runRecorder.js';
 import { MeService } from './services/meService.js';
+import { AdminService } from './services/adminService.js';
 
 try {
   const config = readConfig();
@@ -15,7 +16,7 @@ try {
     : devMemory ? new AuthService(new DevMemoryAuthRepository()) : null;
   if (devMemory) console.warn('DEV ONLY: accounts are kept in memory and lost on restart.');
   else if (!auth) console.warn('Account service unavailable: configure DATABASE_URL and apply database migrations.');
-  const server = createApp(config, undefined, { auth, runRecorder: database ? new PrismaRunRecorder(database) : undefined, me: database ? new MeService(database) : undefined }).listen(config.port, config.host, () => {
+  const server = createApp(config, undefined, { auth, runRecorder: database ? new PrismaRunRecorder(database) : undefined, me: database ? new MeService(database) : undefined, admin: database ? new AdminService(database) : undefined }).listen(config.port, config.host, () => {
     console.log(`choisys-api listening on http://${config.host}:${config.port}`);
   });
   server.requestTimeout = 10_000;

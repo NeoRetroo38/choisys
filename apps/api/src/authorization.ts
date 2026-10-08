@@ -1,4 +1,6 @@
 import type { Role } from '@prisma/client';
+import { ApiError } from './errors.js';
+import { roleHasPermission, type PermissionKey } from './permissions.js';
 
 export interface AuthActor {
   /** Must come from backend authentication, never from a request body. */
@@ -42,4 +44,11 @@ export function canAccessTechnicalData(actor: AuthActor): boolean {
 
 export function canManageSystem(actor: AuthActor): boolean {
   return actor.role === 'SUPERDEV';
+}
+
+/** The single place that turns a role into a yes/no for a named capability (names live in permissions.ts). */
+export function hasCapability(actor: AuthActor, key: PermissionKey): boolean { return roleHasPermission(actor.role, key); }
+
+export function requireCapability(actor: AuthActor, key: PermissionKey): void {
+  if (!hasCapability(actor, key)) throw new ApiError(403, 'FORBIDDEN');
 }

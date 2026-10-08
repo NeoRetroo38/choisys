@@ -10,6 +10,8 @@ import type { AuthService } from './auth/authService.js';
 import type { RunRecorder } from './services/runRecorder.js';
 import type { MeService } from './services/meService.js';
 import { meRoutes } from './meRoutes.js';
+import type { AdminService } from './services/adminService.js';
+import { adminRoutes } from './adminRoutes.js';
 import { RateLimiter as MeLimiter } from './rateLimit.js';
 export interface AppDependencies {
   auth?: AuthService | null;
@@ -21,6 +23,8 @@ export interface AppDependencies {
   runRecorder?: RunRecorder;
   /** Own-account endpoints (/me); absent without a database. */
   me?: MeService;
+  /** Operator endpoints (/admin); absent without a database. */
+  admin?: AdminService;
 }
 export function createApp(config: ApiConfig, cube: CubeClient = new NeoCubeClient(config.token, config.timeoutMs), dependencies: AppDependencies = {}) {
   const app = express();
@@ -51,6 +55,7 @@ export function createApp(config: ApiConfig, cube: CubeClient = new NeoCubeClien
   app.use(authRoutes(dependencies.auth ?? null));
   app.use(productRoutes(new SessionService(cube, undefined, dependencies.runRecorder), dependencies.auth ?? null, dependencies.allowUnauthenticatedProduct === true, dependencies.productLimiter));
   if (dependencies.me) app.use(meRoutes(dependencies.auth ?? null, dependencies.me, dependencies.productLimiter ?? new MeLimiter()));
+  if (dependencies.admin) app.use(adminRoutes(dependencies.auth ?? null, dependencies.admin, dependencies.productLimiter ?? new MeLimiter()));
   app.use((_req, _res, next) => next(new ApiError(404, 'NOT_FOUND')));
   const errors: ErrorRequestHandler = (error: unknown, _req, res, _next) => {
     let safe = error instanceof ApiError ? error : new ApiError(500, 'INTERNAL_ERROR');
