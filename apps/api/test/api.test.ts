@@ -5,7 +5,7 @@ import test from 'node:test';
 import type { AddressInfo } from 'node:net';
 import type { EvaluateRequest, EvaluateResponse, Measurement } from '@scenarys/shared';
 import { createApp } from '../src/app.js';
-import { readConfig } from '../src/config.js';
+import { isAllowedBindAddress, readConfig } from '../src/config.js';
 import { NeoCubeClient } from '../src/neoCubeClient.js';
 import { SessionService } from '../src/sessionService.js';
 import { evaluateInput } from '../src/validation.js';
@@ -187,6 +187,16 @@ test('configuration rejects missing token, wildcard/public binds, wildcard origi
     { CHOISYS_LOCAL_API_TOKEN: undefined }, { API_HOST: '0.0.0.0' }, { API_HOST: '8.8.8.8' },
     { API_ALLOWED_ORIGINS: '*' }, { NEO_CUBE_TIMEOUT_MS: '0' }, { NEO_CUBE_TIMEOUT_MS: '10001' },
   ]) assert.throws(() => readConfig({ CHOISYS_LOCAL_API_TOKEN: testCredential, ...overrides }));
+});
+
+test('configuration accepts LAN and Tailscale addresses only when assigned to this machine', () => {
+  for (const ip of ['192.168.1.154', '10.0.0.2', '172.16.0.1', '100.64.0.1', '100.101.102.103', '100.127.255.254'])
+    assert.equal(isAllowedBindAddress(ip), true, ip);
+  for (const ip of ['100.63.255.255', '100.128.0.1', '8.8.8.8', '0.0.0.0', '172.32.0.1', 'example.com'])
+    assert.equal(isAllowedBindAddress(ip), false, ip);
+  const tailnet = { tailscale0: [{ address: '100.101.102.103', family: 'IPv4', internal: false, netmask: '255.255.255.255', mac: '00:00:00:00:00:00', cidr: '100.101.102.103/32' }] } as never;
+  assert.equal(readConfig({ CHOISYS_LOCAL_API_TOKEN: testCredential, API_HOST: '100.101.102.103' }, tailnet).host, '100.101.102.103');
+  assert.throws(() => readConfig({ CHOISYS_LOCAL_API_TOKEN: testCredential, API_HOST: '100.101.102.104' }, tailnet));
 });
 
 test('HTTP flow creates sessions, validates bodies/CORS and keeps token out of responses', async (t) => {

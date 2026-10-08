@@ -136,6 +136,7 @@ npm --workspace apps/mobile run start -- --lan
 
 Atajo para ver la web desde Safari en el iPhone (misma red privada, HTTP sin cifrar):
 `.\scripts\dev-lan.ps1` arranca C++, API y Expo web y muestra la URL; `-DryRun` solo la muestra.
+Fuera de casa (iPhone o Mac con Tailscale): `-Tailscale`; guía en `docs/DEMO-TAILSCALE.md`.
 
 Abrir el QR en Expo Go compatible con SDK 57. Reiniciar Metro al cambiar la URL.
 La red y el firewall existentes deben permitir API y Metro desde el iPhone; los
