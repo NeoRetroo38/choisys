@@ -1,7 +1,8 @@
 // Starts the whole development environment with one command: engine, API and web, on Windows, macOS or Linux.
 //   node scripts/dev.mjs                  engine + API + web, reachable only from this machine
 //   node scripts/dev.mjs --lan            also reachable from a phone on the same private network
-//   node scripts/dev.mjs --check          start, verify that all three answer, then stop (exit code 0/1)
+//   node scripts/dev.mjs --host IP        reachable at that address instead (e.g. the Tailscale 100.x.y.z of this machine)
+//   node scripts/dev.mjs --check         start, verify that all three answer, then stop (exit code 0/1)
 //   node scripts/dev.mjs --engine PATH    where the engine repository is (default ../neo-cube or NEO_CUBE_DIR)
 //   --no-engine  --no-web                 skip a part
 // Ctrl+C stops everything. It never prints the token or the database URL.
@@ -14,7 +15,7 @@ import { engineBinary, engineDir, isWindows, loadDatabaseUrl, loadToken, private
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(name);
 const engine = engineDir(flag('--engine') ? args[args.indexOf('--engine') + 1] : undefined);
-const lan = flag('--lan');
+const lan = flag('--lan') || flag('--host');
 const check = flag('--check');
 const apiPort = 3000;
 const webPort = 8081;
@@ -22,7 +23,9 @@ const webPort = 8081;
 const token = loadToken();
 if (!token) { console.error('Falta el token local del motor. Ejecuta primero: node scripts/setup.mjs'); process.exit(1); }
 const databaseUrl = loadDatabaseUrl();
-const host = lan ? privateIPv4() : '127.0.0.1';
+const hostArg = flag('--host') ? args[args.indexOf('--host') + 1] : undefined;  // e.g. a Tailscale address (100.x.y.z)
+if (flag('--host') && !/^\d{1,3}(\.\d{1,3}){3}$/.test(hostArg ?? '')) { console.error('--host necesita una IPv4, por ejemplo --host 100.81.78.2'); process.exit(1); }
+const host = hostArg ?? (lan ? privateIPv4() : '127.0.0.1');
 if (lan && !host) { console.error('No encuentro una IPv4 privada para --lan. Conéctate a tu Wi-Fi e inténtalo de nuevo.'); process.exit(1); }
 
 const children = [];
