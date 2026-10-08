@@ -45,6 +45,8 @@ Para volver al modo Wi-Fi de casa: `.\scripts\lan-always.ps1 -Install` (sin `-Ta
 - La API solo escucha en una dirección asignada al PC: loopback, IPv4 privada de la LAN o IPv4 de
   Tailscale (`100.64.0.0/10`). Nunca `0.0.0.0` ni IPs públicas (`apps/api/src/config.ts`).
 - `-Tailscale` toma la IP con `tailscale ip -4` y acepta como origen tanto la IP como el nombre MagicDNS.
+- Sin PostgreSQL, las cuentas y sesiones se conservan en `%LOCALAPPDATA%\choisys\auth-v1.json`;
+  el archivo solo contiene hashes y no se sincroniza con el repositorio.
 - El modo se guarda en la variable de usuario `CHOISYS_TAILSCALE=1`, que también lee `lan-watch.ps1` al
   reiniciar tras una actualización de `main`. `-Uninstall` la borra.
 - No verificado: arranque real en Windows con Tailscale (los scripts se probaron en seco), regla del

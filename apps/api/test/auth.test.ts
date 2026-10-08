@@ -1,13 +1,17 @@
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { createHash, randomUUID } from 'node:crypto';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import test from 'node:test';
 import type { AddressInfo } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { PrismaClient } from '@prisma/client';
 import { createApp } from '../src/app.js';
 import { readConfig } from '../src/config.js';
 import { AuthService, AUTH_SESSION_TTL_MS, credentialsInput } from '../src/auth/authService.js';
 import { PrismaAuthRepository, type AuthAccount, type AuthRepository, type AuthSessionRecord, type NewAccount, type NewAuthSession } from '../src/auth/authRepository.js';
+import { DevFileAuthRepository } from '../src/auth/devFileRepository.js';
 import { hashPassword, verifyPassword } from '../src/auth/password.js';
 
 // Test double lives only here. Production uses PrismaAuthRepository with PostgreSQL.
@@ -98,6 +102,27 @@ test('sessions survive service recreation using persisted records, slide expiry 
   now += AUTH_SESSION_TTL_MS;
   await assert.rejects(restarted.authenticate(bearer(login.token)), { code: 'AUTH_REQUIRED' });
   await assert.rejects(restarted.authenticate('Bearer malformed'), { code: 'AUTH_REQUIRED' });
+});
+
+test('private demo accounts and sessions survive an API restart without storing bearer tokens', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'choisys-auth-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const path = join(directory, 'auth-v1.json');
+  const first = new AuthService(new DevFileAuthRepository(path));
+  const registered = await first.register(credentials, 'tailscale-client');
+
+  const restarted = new AuthService(new DevFileAuthRepository(path));
+  assert.equal((await restarted.authenticate(bearer(registered.token))).response.profile.id, registered.profile.id);
+  const loggedIn = await restarted.login({ email: credentials.email, password: credentials.password }, 'tailscale-client');
+  assert.equal(loggedIn.profile.id, registered.profile.id);
+  await restarted.logout(bearer(loggedIn.token));
+
+  const restartedAgain = new AuthService(new DevFileAuthRepository(path));
+  await assert.rejects(restartedAgain.authenticate(bearer(loggedIn.token)), { code: 'AUTH_REQUIRED' });
+  const encoded = await readFile(path, 'utf8');
+  assert.equal(encoded.includes(credentials.password), false);
+  assert.equal(encoded.includes(registered.token), false);
+  assert.equal(encoded.includes(loggedIn.token), false);
 });
 
 test('disabled accounts immediately lose existing sessions and cannot log in', async () => {

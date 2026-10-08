@@ -59,7 +59,7 @@ Write-Host "IPv4 del PC:  $Address$(if ($Tailscale) { '  (Tailscale)' })"
 Write-Host "API:          $apiUrl  (solo esa interfaz)"
 Write-Host "Safari:       $webOrigin"
 foreach ($n in $names) { Write-Host "              http://${n}:$WebPort" }
-if (-not $env:DATABASE_URL) { Write-Host 'Cuentas:      EN MEMORIA (CHOISYS_DEV_MEMORY_AUTH=1): puedes registrarte en Safari, pero se pierden al reiniciar la API.' }
+if (-not $env:DATABASE_URL) { Write-Host 'Cuentas:      almacén local privado y persistente de desarrollo.' }
 if ($DryRun) { Write-Host 'DryRun: no se arranca nada.'; return }
 
 if (-not $SkipEngine) {
@@ -70,8 +70,8 @@ if (-not $SkipEngine) {
 $env:API_HOST = $Address
 $env:PORT = "$ApiPort"
 $env:API_ALLOWED_ORIGINS = ($origins -join ',')
-# Sin PostgreSQL no hay servicio de cuentas: se usan cuentas en memoria (solo desarrollo; se pierden al reiniciar la API).
-if (-not $env:DATABASE_URL) { $env:CHOISYS_DEV_MEMORY_AUTH = '1' }
+# Sin PostgreSQL, la demo usa un archivo privado fuera del repositorio para conservar cuentas y sesiones tras reinicios.
+if (-not $env:DATABASE_URL) { $env:CHOISYS_DEV_AUTH_FILE = Join-Path $env:LOCALAPPDATA 'choisys\auth-v1.json' }
 Start-Process powershell -WorkingDirectory $root -WindowStyle Normal -ArgumentList '-NoExit', '-File', "`"$root\apps\api\run.ps1`"", '-Mode', 'dev'
 
 $env:EXPO_PUBLIC_API_URL = $apiUrl
