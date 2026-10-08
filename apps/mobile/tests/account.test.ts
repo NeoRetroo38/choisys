@@ -3,7 +3,7 @@ import test from 'node:test';
 import { createAccountApi } from '../src/account/accountApi';
 import { capabilitySet, navigationModel } from '../src/account/capabilities';
 import { ApiRequestError, errorMessage } from '../src/api/request';
-import { AccountSessionScope } from '../src/account/sessionScope';
+import { AccountRefreshGate, AccountSessionScope } from '../src/account/sessionScope';
 import { isLowerRole, roleChoices } from '../src/account/rolePresentation';
 import type { AuthState } from '../src/auth/sessionController';
 
@@ -109,6 +109,27 @@ test('account scope never restores old capabilities after logout or account swit
   const nextTicket = scope.capture(next);
   assert.equal(scope.isCurrent(nextTicket, { ...next, status: 'loading' }), false);
   assert.equal(scope.isCurrent(nextTicket, next), false); // revalidation is a new lifecycle
+});
+
+test('initial and focused refreshes join one request, never another account or later focus', async () => {
+  const gate = new AccountRefreshGate();
+  let resolve!: () => void;
+  const delayed = new Promise<void>(finish => { resolve = finish; });
+  let calls = 0;
+  const load = () => { calls++; return delayed; };
+  const initial = gate.run(1, load);
+  assert.equal(gate.run(1, load), initial);
+  await Promise.resolve();
+  assert.equal(calls, 1);
+  const otherAccount = gate.run(2, async () => { calls++; });
+  assert.notEqual(otherAccount, initial);
+  resolve();
+  await Promise.all([initial, otherAccount]);
+  await gate.run(2, async () => { calls++; });
+  assert.equal(calls, 3); // returning to the route after completion really refreshes
+  const previous = gate.run(2, async () => undefined);
+  gate.clear(); // logout/unmount, even before the old promise settles
+  assert.notEqual(gate.run(2, async () => undefined), previous);
 });
 
 test('a late account response is discarded after logout, including a delayed body', async () => {

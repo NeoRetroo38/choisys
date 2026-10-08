@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { router } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
 import { StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import type { RunSummary } from '@scenarys/shared';
 import { useAccount } from '../account/AccountProvider';
@@ -27,6 +27,8 @@ export default function Account() {
   const [password, setPassword] = useState<string | null>(null);
   const back = () => router.canGoBack() ? router.back() : router.replace('/');
   const { model, profile, api, roleRequest } = account;
+  const refresh = account.refresh;
+  useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
   const requestLine = roleRequest && {
     PENDING: `Pediste ${roleLabel[roleRequest.requestedRole]}. Un sudev lo revisará; mientras, eres usuario.`,
     APPROVED: `Tu solicitud de ${roleLabel[roleRequest.requestedRole]} fue aprobada.`,

@@ -4,7 +4,7 @@ import { useAuth } from '../auth/AuthProvider';
 import { ApiRequestError } from '../api/request';
 import { createAccountApi, type AccountApi, type OwnRoleRequest } from './accountApi';
 import { capabilitySet, navigationModel, type Capabilities, type NavigationModel } from './capabilities';
-import { AccountSessionScope } from './sessionScope';
+import { AccountRefreshGate, AccountSessionScope } from './sessionScope';
 
 /**
  * AppShell state: identity + capabilities + navigation model, loaded once from GET /me after sign-in.
@@ -32,6 +32,7 @@ const context = createContext<AccountContext | null>(null);
 export function AccountProvider({ children }: PropsWithChildren) {
   const { controller, state: auth } = useAuth();
   const [scope] = useState(() => new AccountSessionScope());
+  const [refreshGate] = useState(() => new AccountRefreshGate());
   const mounted = useRef(true);
   const ticket = useMemo(() => scope.capture(controller.getState()), [scope, controller, auth.status, auth.token, auth.profile?.id]);
   const isCurrent = useCallback(() => mounted.current && scope.isCurrent(ticket, controller.getState()), [scope, ticket, controller]);
@@ -45,11 +46,12 @@ export function AccountProvider({ children }: PropsWithChildren) {
     const unsubscribe = controller.subscribe(next => {
       if (scope.observe(next)) {
         refreshId.current++;
+        refreshGate.clear();
         setBound({ id: -1, state: emptyState });
       }
     });
-    return () => { mounted.current = false; refreshId.current++; unsubscribe(); };
-  }, [controller, scope]);
+    return () => { mounted.current = false; refreshId.current++; refreshGate.clear(); unsubscribe(); };
+  }, [controller, scope, refreshGate]);
 
   const setProfile = useCallback((profile: MeProfile, keys: string[], roleRequest?: OwnRoleRequest | null) => {
     if (!isCurrent() || profile.id !== controller.getState().profile?.id) return;
@@ -60,20 +62,23 @@ export function AccountProvider({ children }: PropsWithChildren) {
     } });
   }, [controller, isCurrent, ticket.id]);
 
-  const refresh = useCallback(async () => {
-    if (!isCurrent()) return;
-    const operation = ++refreshId.current;
-    try {
-      const me = await api.me();
-      if (!isCurrent() || operation !== refreshId.current) return;
-      setProfile(me.profile, me.capabilities, me.roleRequest);
-    } catch (error) {
-      if (!isCurrent() || operation !== refreshId.current) return;
-      if (error instanceof ApiRequestError && error.code === 'AUTH_REQUIRED') { void controller.bootstrap(); return; }
-      const status = error instanceof ApiRequestError && error.code === 'NOT_FOUND' ? 'unavailable' : 'error';
-      setBound({ id: ticket.id, state: { ...emptyState, status } });
-    }
-  }, [api, controller, setProfile, isCurrent, ticket.id]);
+  const refresh = useCallback(() => {
+    if (!isCurrent()) return Promise.resolve();
+    return refreshGate.run(ticket.id, async () => {
+      if (!isCurrent()) return;
+      const operation = ++refreshId.current;
+      try {
+        const me = await api.me();
+        if (!isCurrent() || operation !== refreshId.current) return;
+        setProfile(me.profile, me.capabilities, me.roleRequest);
+      } catch (error) {
+        if (!isCurrent() || operation !== refreshId.current) return;
+        if (error instanceof ApiRequestError && error.code === 'AUTH_REQUIRED') { void controller.bootstrap(); return; }
+        const status = error instanceof ApiRequestError && error.code === 'NOT_FOUND' ? 'unavailable' : 'error';
+        setBound({ id: ticket.id, state: { ...emptyState, status } });
+      }
+    });
+  }, [api, controller, setProfile, isCurrent, ticket.id, refreshGate]);
 
   useEffect(() => { if (auth.status === 'signedIn') void refresh(); }, [auth.status, auth.token, refresh]);
 

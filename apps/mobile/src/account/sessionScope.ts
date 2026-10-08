@@ -29,3 +29,19 @@ export class AccountSessionScope {
     return this.status === 'signedIn' && ticket.token !== null && ticket.id === this.id && ticket.token === this.token;
   }
 }
+
+/** Join concurrent refreshes for this lifecycle without sharing work across accounts. */
+export class AccountRefreshGate {
+  private pending: { id: number; promise: Promise<void> } | null = null;
+
+  run(id: number, refresh: () => Promise<void>): Promise<void> {
+    if (this.pending?.id === id) return this.pending.promise;
+    const promise = Promise.resolve().then(refresh);
+    this.pending = { id, promise };
+    const release = () => { if (this.pending?.promise === promise) this.pending = null; };
+    void promise.then(release, release);
+    return promise;
+  }
+
+  clear(): void { this.pending = null; }
+}
