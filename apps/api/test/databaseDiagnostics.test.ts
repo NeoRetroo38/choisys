@@ -4,7 +4,7 @@ import type { PrismaClient } from '@prisma/client';
 import { permissions, roleGrants } from '../src/permissions.js';
 import { inspectDatabase } from '../src/services/databaseDiagnostics.js';
 
-const tables = ['accounts', 'account_sessions', 'profiles', 'cube_data', 'permissions', 'role_permissions', 'role_changes', '_prisma_migrations'];
+const tables = ['accounts', 'account_sessions', 'profiles', 'cube_data', 'permissions', 'role_permissions', 'role_changes', 'role_requests', '_prisma_migrations'];
 function database(options: { badChecksum?: boolean; missingTable?: boolean; badSeed?: boolean; failure?: boolean } = {}) {
   const calls: string[] = [];
   const tx = {

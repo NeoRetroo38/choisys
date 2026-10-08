@@ -30,6 +30,12 @@ enum CubeDataStatus {
   FAILED
 }
 
+enum RoleRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model Account {
   id           String           @id @default(uuid()) @db.Uuid
   email        String           @unique @db.VarChar(320)
@@ -60,19 +66,39 @@ model AccountSession {
 }
 
 model Profile {
-  id                  String       @id @default(uuid()) @db.Uuid
-  accountId           String       @unique @map("account_id") @db.Uuid
-  role                Role         @default(USER)
-  displayName         String       @map("display_name") @db.VarChar(120)
-  createdAt           DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt           DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
-  account             Account      @relation(fields: [accountId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  id                  String        @id @default(uuid()) @db.Uuid
+  accountId           String        @unique @map("account_id") @db.Uuid
+  role                Role          @default(USER)
+  displayName         String        @map("display_name") @db.VarChar(120)
+  createdAt           DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+  account             Account       @relation(fields: [accountId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   cubeData            CubeData[]
-  roleChangesReceived RoleChange[] @relation("RoleChangeTarget")
-  roleChangesMade     RoleChange[] @relation("RoleChangeActor")
+  roleChangesReceived RoleChange[]  @relation("RoleChangeTarget")
+  roleChangesMade     RoleChange[]  @relation("RoleChangeActor")
+  roleRequests        RoleRequest[] @relation("RoleRequestTarget")
+  roleRequestsDecided RoleRequest[] @relation("RoleRequestActor")
 
   @@index([role])
   @@map("profiles")
+}
+
+/// One requested role at registration, never an automatic grant. Terminal decisions are immutable.
+model RoleRequest {
+  id                 String            @id @default(uuid()) @db.Uuid
+  profileId          String            @unique @map("profile_id") @db.Uuid
+  requestedRole      Role              @map("requested_role")
+  status             RoleRequestStatus @default(PENDING)
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  decidedAt          DateTime?         @map("decided_at") @db.Timestamptz(3)
+  decidedByProfileId String?           @map("decided_by_profile_id") @db.Uuid
+  reason             String?           @db.VarChar(240)
+  profile            Profile           @relation("RoleRequestTarget", fields: [profileId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  decidedBy          Profile?          @relation("RoleRequestActor", fields: [decidedByProfileId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([status, createdAt])
+  @@index([decidedByProfileId])
+  @@map("role_requests")
 }
 
 model CubeData {
