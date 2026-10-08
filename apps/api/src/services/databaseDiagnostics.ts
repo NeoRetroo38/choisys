@@ -12,7 +12,7 @@ export interface DatabaseReport {
   read: boolean;
   errorCode?: string;
 }
-const expectedTables = ['accounts', 'account_sessions', 'profiles', 'cube_data', 'permissions', 'role_permissions', 'role_changes'];
+const expectedTables = ['accounts', 'account_sessions', 'profiles', 'cube_data', 'permissions', 'role_permissions', 'role_changes', 'role_requests'];
 
 /** No registration, seed, authentication refresh or account changes. Never returns database rows or connection details. */
 export async function inspectDatabase(db: PrismaClient, expected: readonly ExpectedMigration[]): Promise<DatabaseReport> {

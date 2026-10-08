@@ -33,8 +33,8 @@ recibe la credencial del servicio. En un iPhone físico, `127.0.0.1` es el iPhon
   Checkout local habitual: `C:\Users\Admin\Documents\Scenarys\backend\neo-cube`.
 
 La persistencia PostgreSQL/Prisma está definida en `apps/api/prisma`. El schema tiene
-siete tablas: `accounts`, `account_sessions`, `profiles`, `cube_data`, `permissions`,
-`role_permissions` y `role_changes`; almacena resultados ya producidos por C++ y no
+ocho tablas: `accounts`, `account_sessions`, `profiles`, `cube_data`, `permissions`,
+`role_permissions`, `role_changes` y `role_requests`; almacena resultados ya producidos por C++ y no
 calcula inferencias. Existe una migración inicial revisada
 (`apps/api/prisma/migrations/20261006000000_initial`). Cada servidor debe comprobar su
 propia instancia con `npm run check:neon`: tener `DATABASE_URL` no prueba la conexión,
@@ -48,6 +48,14 @@ Con PostgreSQL, `/me` devuelve perfil y capabilities; `/me/runs`, `/me/export`,
 `/me/profile` y `/me/delete` operan solo sobre el usuario autenticado. Los endpoints
 `/admin/*` comprueban las capacidades de SUPERDEV en la API. `/live` es una página de
 acceso; sus datos de conexiones requieren `system.manage`.
+
+La solicitud de rol durante el registro está desactivada por defecto. Con
+`CHOISYS_ROLE_REQUESTS=1`, cuenta USER y solicitud PENDING se crean atómicamente;
+solo SUPERDEV lista/decide y nunca puede aprobar otro SUPERDEV ni su propia solicitud.
+Requiere la migración `20261008000000_role_requests` y el catálogo actualizado antes de
+activarlo con PostgreSQL. Este cambio prepara el SQL, no lo aplica a ninguna instancia.
+También funciona en memoria de desarrollo (sin persistencia), no en CHOISYS_DEV_AUTH_FILE.
+Contrato, filtros y errores: [`docs/ROLES.md`](docs/ROLES.md).
 
 Con la migración aplicada, `npm run db:seed --workspace apps/api` carga el catálogo de
 permisos y las asignaciones por rol (se puede repetir sin efectos). Después, para asignar el
@@ -172,6 +180,8 @@ nunca `*`. Esta tarea no habilita Expo web ni instala sus dependencias.
   debe provisionarse fuera de Git.
 - `CHOISYS_DEV_AUTH_FILE`: archivo local externo al repositorio para conservar cuentas y
   sesiones en la demo privada sin PostgreSQL; contiene solo hashes, nunca contraseñas ni tokens.
+- `CHOISYS_ROLE_REQUESTS`: `1` para habilitar solicitudes de rol en PostgreSQL ya migrado o
+  memoria de desarrollo. Apagado por defecto; no compatible con el almacén de archivo.
 
 `npm run check:neon` lee `DATABASE_URL` del entorno o del archivo externo indicado
 por `CHOISYS_ENV_FILE`. Comprueba Prisma, tablas, migraciones y seed dentro de una

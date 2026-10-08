@@ -89,7 +89,8 @@ test('capabilities per role come from the single catalogue, and ADMIN/DEV/SUPERA
     for (const p of people) {
       const { status, body } = await s.call(p, 'GET', '/me');
       assert.equal(status, 200);
-      assert.deepEqual(body.capabilities, [...roleGrants[p.role]]);
+      assert.deepEqual(body.capabilities, roleGrants[p.role].filter(key => key !== 'role_requests.read'));
+      assert.equal(body.roleRequest, null); // new schema is never queried while the feature is off
       assert.equal(body.profile.role, p.role);
       assert.ok(body.capabilities.every((c: string) => c in permissions));
       assert.equal(JSON.stringify(body).includes('passwordHash') || JSON.stringify(body).includes('tokenHash'), false);

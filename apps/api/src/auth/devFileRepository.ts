@@ -3,6 +3,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { Role } from '@prisma/client';
 import type { AuthAccount, AuthRepository, AuthSessionRecord, NewAccount, NewAuthSession } from './authRepository.js';
+import { ApiError } from '../errors.js';
 
 interface StoredAccount extends Omit<AuthAccount, 'profile'> {
   profile: { id: string; displayName: string; role: Role } | null;
@@ -71,6 +72,7 @@ export class DevFileAuthRepository implements AuthRepository {
   }
 
   async register(input: NewAccount, session: NewAuthSession): Promise<AuthSessionRecord> {
+    if (input.requestedRole) throw new ApiError(503, 'ROLE_REQUESTS_UNAVAILABLE');
     return this.mutate(store => {
       if (store.accounts.some(value => value.email === input.email)) {
         throw Object.assign(new Error('duplicate account'), { code: 'P2002' });

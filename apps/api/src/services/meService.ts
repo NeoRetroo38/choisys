@@ -4,6 +4,7 @@ import type { AuthActor } from '../authorization.js';
 import { verifyPassword } from '../auth/password.js';
 import { ApiError } from '../errors.js';
 import { permissionsFor } from '../permissions.js';
+import type { RoleRequestService } from './roleRequestService.js';
 
 const MAX_RUNS = 500;
 
@@ -14,7 +15,7 @@ function measurementsOf(output: unknown): Measurement[] {
 
 /** The person's own data only: every query is scoped by the authenticated profile id, never by a request field. */
 export class MeService {
-  constructor(private readonly db: PrismaClient) {}
+  constructor(private readonly db: PrismaClient, private readonly roleRequests?: RoleRequestService) {}
 
   private async profile(actor: AuthActor): Promise<MeProfile> {
     const row = await this.db.profile.findUnique({ where: { id: actor.profileId }, select: { id: true, displayName: true, role: true, createdAt: true } });
@@ -24,7 +25,10 @@ export class MeService {
 
   async me(actor: AuthActor): Promise<MeResponse> {
     const profile = await this.profile(actor);
-    return { ok: true, profile, capabilities: permissionsFor(profile.role) };
+    return { ok: true, profile,
+      capabilities: permissionsFor(profile.role).filter(key => key !== 'role_requests.read' || this.roleRequests !== undefined),
+      roleRequest: this.roleRequests ? await this.roleRequests.own(actor) : null,
+    };
   }
 
   async rename(actor: AuthActor, displayName: string): Promise<MeResponse> {

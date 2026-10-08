@@ -5,32 +5,35 @@ import { ApiError } from '../errors.js';
 import type { AuthRepository, AuthSessionRecord, NewAuthSession } from './authRepository.js';
 import { hashPassword, verifyPassword } from './password.js';
 import type { Seen } from '../connections.js';
+import { isRequestedRole } from '../services/roleRequestService.js';
 
 export const AUTH_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
 const MAX_TRACKED_ATTEMPTS = 10_000;
 const digest = (value: string) => createHash('sha256').update(value).digest('hex');
 
-function body(input: unknown, keys: string[]): Record<string, string> {
+function body(input: unknown, keys: string[], optional: string[] = []): Record<string, unknown> {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new ApiError(400, 'INVALID_REQUEST');
   const object = input as Record<string, unknown>;
-  if (Object.keys(object).length !== keys.length || keys.some(key => typeof object[key] !== 'string') || Object.keys(object).some(key => !keys.includes(key))) {
+  if (keys.some(key => typeof object[key] !== 'string') || Object.keys(object).some(key => ![...keys, ...optional].includes(key))) {
     throw new ApiError(400, 'INVALID_REQUEST');
   }
-  return object as Record<string, string>;
+  return object;
 }
 
 export function credentialsInput(input: unknown, register: true): RegisterRequest;
 export function credentialsInput(input: unknown, register: false): LoginRequest;
 export function credentialsInput(input: unknown, register: boolean): RegisterRequest | LoginRequest {
-  const value = body(input, register ? ['email', 'password', 'displayName'] : ['email', 'password']);
-  const email = value.email.trim().toLowerCase();
+  const value = body(input, register ? ['email', 'password', 'displayName'] : ['email', 'password'], register ? ['requestedRole'] : []);
+  const email = (value.email as string).trim().toLowerCase();
   if (email.length > 320 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || /[\u0000-\u001f\u007f]/.test(email)) throw new ApiError(400, 'INVALID_REQUEST');
-  if (value.password.length < 8 || value.password.length > 128 || Buffer.byteLength(value.password, 'utf8') > 256) throw new ApiError(400, 'INVALID_REQUEST');
-  if (!register) return { email, password: value.password };
-  const displayName = value.displayName.trim();
+  const password = value.password as string;
+  if (password.length < 8 || password.length > 128 || Buffer.byteLength(password, 'utf8') > 256) throw new ApiError(400, 'INVALID_REQUEST');
+  if (!register) return { email, password };
+  const displayName = (value.displayName as string).trim();
   if (!displayName || displayName.length > 120 || /[\u0000-\u001f\u007f]/.test(displayName)) throw new ApiError(400, 'INVALID_REQUEST');
-  return { email, password: value.password, displayName };
+  if ('requestedRole' in value && !isRequestedRole(value.requestedRole)) throw new ApiError(400, 'INVALID_REQUEST');
+  return { email, password, displayName, ...(value.requestedRole ? { requestedRole: value.requestedRole as RegisterRequest['requestedRole'] } : {}) };
 }
 
 export interface AuthenticatedSession { actor: AuthActor; response: AuthMeResponse }
@@ -38,7 +41,7 @@ export interface AuthenticatedSession { actor: AuthActor; response: AuthMeRespon
 export class AuthService {
   private readonly attempts = new Map<string, { count: number; expiresAt: number }>();
   private pendingHashes = 0;
-  constructor(private readonly repository: AuthRepository, private readonly now: () => number = Date.now, private readonly onSeen?: (seen: Seen) => void) {}
+  constructor(private readonly repository: AuthRepository, private readonly now: () => number = Date.now, private readonly onSeen?: (seen: Seen) => void, private readonly roleRequestsEnabled = false) {}
 
   private throttle(ip: string, email: string): void {
     const now = this.now();
@@ -85,10 +88,14 @@ export class AuthService {
 
   async register(input: unknown, ip: string): Promise<AuthResponse> {
     const credentials = credentialsInput(input, true);
+    // A disabled or unsupported backend must not silently lose the request or create a partial account.
+    if (credentials.requestedRole && !this.roleRequestsEnabled) throw new ApiError(503, 'ROLE_REQUESTS_UNAVAILABLE');
     this.throttle(ip, credentials.email);
     const passwordHash = await this.expensive(() => hashPassword(credentials.password));
     const { token, session } = this.newSession();
-    const record = await this.stored(() => this.repository.register({ email: credentials.email, displayName: credentials.displayName, passwordHash }, session), true);
+    const record = await this.stored(() => this.repository.register({ email: credentials.email, displayName: credentials.displayName, passwordHash,
+      ...(credentials.requestedRole ? { requestedRole: credentials.requestedRole } : {}),
+    }, session), true);
     return { ...this.publicSession(record), token };
   }
 
