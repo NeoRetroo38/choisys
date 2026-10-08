@@ -8,6 +8,7 @@ export class AccountSessionScope {
   private status: AuthState['status'] | null = null;
   private token: string | null = null;
   private profileId: string | null = null;
+  private ticket: AccountSessionTicket | null = null;
 
   observe(auth: AuthState): boolean {
     const profileId = auth.profile?.id ?? null;
@@ -21,7 +22,8 @@ export class AccountSessionScope {
 
   capture(auth: AuthState): AccountSessionTicket {
     this.observe(auth);
-    return { id: this.id, token: auth.token };
+    if (this.ticket?.id !== this.id) this.ticket = { id: this.id, token: auth.token };
+    return this.ticket;
   }
 
   isCurrent(ticket: AccountSessionTicket, auth: AuthState): boolean {

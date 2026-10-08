@@ -34,7 +34,9 @@ export function AccountProvider({ children }: PropsWithChildren) {
   const [scope] = useState(() => new AccountSessionScope());
   const [refreshGate] = useState(() => new AccountRefreshGate());
   const mounted = useRef(true);
-  const ticket = useMemo(() => scope.capture(controller.getState()), [scope, controller, auth.status, auth.token, auth.profile?.id]);
+  // Capture on every render: primitive auth fields may be unchanged after batched intermediate events.
+  // The scope returns the same object within an epoch, keeping the API/effects stable on data renders.
+  const ticket = scope.capture(controller.getState());
   const isCurrent = useCallback(() => mounted.current && scope.isCurrent(ticket, controller.getState()), [scope, ticket, controller]);
   // Bind every endpoint to this token. A delayed action must never use the next person's token.
   const api = useMemo(() => createAccountApi(process.env.EXPO_PUBLIC_API_URL, () => ticket.token, fetch, isCurrent,

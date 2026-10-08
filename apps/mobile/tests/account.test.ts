@@ -136,12 +136,16 @@ test('a batched auth lifecycle changes the consumer boundary even for the same p
   const scope = new AccountSessionScope();
   const auth = signedIn('session-a');
   const original = scope.capture(auth);
+  assert.equal(scope.capture(auth), original); // data-only renders must not recreate the API or restart /me
   // The provider observes controller events synchronously; React need not render either intermediate state.
   scope.observe({ ...auth, status: 'loading' });
   scope.observe({ status: 'signedOut', token: null, profile: null, error: null });
   scope.observe(auth);
   const next = scope.capture(auth);
+  assert.notEqual(next, original); // same auth primitives/object, fresh ticket without a React useMemo
   assert.notEqual(next.id, original.id); // Fragment key={ticket.id} remounts every account/system consumer
+  assert.equal(scope.capture(auth), next); // following data renders remain stable
+  assert.equal(scope.isCurrent(next, auth), true);
   assert.equal(scope.isCurrent(original, auth), false);
 });
 
