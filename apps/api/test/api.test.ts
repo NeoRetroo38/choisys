@@ -238,3 +238,25 @@ test('HTTP flow creates sessions, validates bodies/CORS and keeps token out of r
   assert.equal(preflight.status, 204);
   assert.equal((await fetch(base + '/unknown')).status, 404);
 });
+
+test('a completed Run is handed to the recorder once, and a recorder failure does not break the answer', async () => {
+  const stored: { profileId: string; measurements: Measurement[] }[] = [];
+  let fail = false;
+  const cube = { evaluate: async (request: EvaluateRequest) => success(request) };
+  const service = new SessionService(cube, undefined, {
+    recordCompleted: async (profileId, saved) => { if (fail) throw new Error('db down'); stored.push({ profileId, measurements: saved }); },
+  });
+  const run = async (profileId: string) => {
+    const { session } = service.start({ scenarioId: 'choice-grid' }, profileId);
+    let last;
+    for (const phase of [1, 2, 3] as const) last = await service.evaluate({ ...input, sessionId: session.sessionId, phase }, profileId);
+    return { sessionId: session.sessionId, last };
+  };
+  const first = await run('profile-a');
+  assert.equal(first.last?.result.status, 'completed');
+  assert.deepEqual(stored, [{ profileId: 'profile-a', measurements }]);
+  await service.evaluate({ ...input, sessionId: first.sessionId, phase: 3 }, 'profile-a'); // retry
+  assert.equal(stored.length, 1);
+  fail = true;
+  assert.equal((await run('profile-b')).last?.result.status, 'completed');
+});
