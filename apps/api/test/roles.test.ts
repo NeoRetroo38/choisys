@@ -5,6 +5,7 @@ import test from 'node:test';
 import type { AddressInfo } from 'node:net';
 import type { PrismaClient, Role } from '@prisma/client';
 import { createApp } from '../src/app.js';
+import type { AuthActor } from '../src/authorization.js';
 import type { AuthRepository } from '../src/auth/authRepository.js';
 import { AuthService } from '../src/auth/authService.js';
 import { readConfig } from '../src/config.js';
@@ -12,6 +13,7 @@ import { permissions, roleGrants, type PermissionKey } from '../src/permissions.
 import { AdminService } from '../src/services/adminService.js';
 import { ConnectionRegistry, deviceLabel } from '../src/connections.js';
 import { MeService } from '../src/services/meService.js';
+import { ApiError } from '../src/errors.js';
 
 const day = new Date('2026-10-08T10:00:00Z');
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -30,25 +32,62 @@ function world() {
   const changes: { target: string; actor: string; from: Role; to: Role; reason: string | null }[] = [];
   const get = (id: string) => all.find(p => p.id === id);
   const row = (p: Person) => ({ id: p.id, displayName: p.name, role: p.role, createdAt: day, account: { isActive: p.active }, _count: { cubeData: p.runs } });
+  const calls: string[] = [];
+  const controls: { beforeTransaction?: () => void; beforeRoleWrite?: () => void; beforeAccountWrite?: () => void; failAudit?: boolean; failRead?: boolean } = {};
+  let queue = Promise.resolve();
   const db = {
+    $queryRaw: async (strings: TemplateStringsArray, id: string) => {
+      const sql = strings.join('?');
+      assert.match(sql, /JOIN accounts/); assert.match(sql, /FOR UPDATE OF p, a/);
+      assert.match(sql, /WHERE p.id = \?::uuid/); // parameter, never interpolated SQL
+      calls.push(`lock:${id}`);
+      const p = get(id);
+      return p ? [{ id: p.id, role: p.role, accountId: `acc-${p.id}`, isActive: p.active }] : [];
+    },
     profile: {
       findMany: async () => all.map(row),
       findUnique: async ({ where }: { where: { id: string } }) => { const p = get(where.id); return p ? { id: p.id, role: p.role, accountId: `acc-${p.id}`, displayName: p.name, createdAt: day } : null; },
-      findUniqueOrThrow: async ({ where }: { where: { id: string } }) => row(get(where.id)!),
-      updateMany: async ({ where, data }: { where: { id: string; role: Role }; data: { role: Role } }) => {
+      findUniqueOrThrow: async ({ where }: { where: { id: string } }) => {
+        calls.push('read:result'); if (controls.failRead) throw new Error('fixture result failure'); return row(get(where.id)!);
+      },
+      updateMany: async ({ where, data }: { where: { id: string; accountId: string; role: Role }; data: { role: Role } }) => {
+        calls.push('write:role'); controls.beforeRoleWrite?.();
         const p = get(where.id); if (!p || p.role !== where.role) return { count: 0 };
+        assert.equal(where.accountId, `acc-${p.id}`);
         p.role = data.role; return { count: 1 };
       },
     },
-    account: { update: async ({ where, data }: { where: { id: string }; data: { isActive: boolean } }) => { get(where.id.replace('acc-', ''))!.active = data.isActive; } },
+    account: {
+      update: async ({ where, data }: { where: { id: string }; data: { isActive: boolean } }) => { get(where.id.replace('acc-', ''))!.active = data.isActive; },
+      updateMany: async ({ where, data }: { where: { id: string; isActive: boolean; profile: { id: string; role: Role } }; data: { isActive: boolean } }) => {
+        calls.push('write:active'); controls.beforeAccountWrite?.();
+        const p = get(where.id.replace('acc-', ''));
+        if (!p || p.active !== where.isActive || p.id !== where.profile.id || p.role !== where.profile.role) return { count: 0 };
+        p.active = data.isActive; return { count: 1 };
+      },
+    },
     roleChange: {
       create: async ({ data }: { data: { targetProfileId: string; actorProfileId: string; fromRole: Role; toRole: Role; reason: string | null } }) => {
+        calls.push('write:audit'); if (controls.failAudit) throw new Error('fixture audit failure');
         changes.push({ target: data.targetProfileId, actor: data.actorProfileId, from: data.fromRole, to: data.toRole, reason: data.reason });
       },
       findMany: async () => changes.map((c, i) => ({ id: uuid(100 + i), targetProfileId: c.target, actorProfileId: c.actor, fromRole: c.from, toRole: c.to, reason: c.reason, createdAt: day })),
     },
     cubeData: { findMany: async () => [] },
-    $transaction: async <T>(fn: (tx: unknown) => Promise<T>) => fn(db),
+    // Deterministic serialization/rollback simulator, not a PostgreSQL execution claim.
+    $transaction: <T>(fn: (tx: unknown) => Promise<T>, options: { maxWait: number; timeout: number }) => {
+      assert.deepEqual(options, { maxWait: 5000, timeout: 10000 });
+      const result = queue.then(async () => {
+        controls.beforeTransaction?.();
+        const before = structuredClone({ all, changes });
+        calls.push('transaction');
+        try { return await fn(db); } catch (error) {
+          all.splice(0, all.length, ...before.all); changes.splice(0, changes.length, ...before.changes);
+          throw error;
+        }
+      });
+      queue = result.then(() => undefined, () => undefined); return result;
+    },
   };
   const repository: AuthRepository = {
     register: async () => { throw new Error('unused'); },
@@ -61,7 +100,7 @@ function world() {
       return { id: 's', tokenHash: hash, expiresAt, account: { id: `acc-${p.id}`, email: 'x@example.test', passwordHash: 'x', isActive: true, profile: { id: p.id, displayName: p.name, role: p.role } } };
     },
   };
-  return { all, changes, get, db: db as unknown as PrismaClient, repository };
+  return { all, changes, get, calls, controls, db: db as unknown as PrismaClient, repository };
 }
 
 async function serve() {
@@ -82,6 +121,88 @@ async function serve() {
   return { ...w, base, call, close: () => server.close() };
 }
 const by = (role: Role) => people.find(p => p.role === role)!;
+const error = (status: number, code: string) => (value: unknown) => value instanceof ApiError && value.status === status && value.code === code;
+const staleBoss: AuthActor = { profileId: by('SUPERDEV').id, role: 'SUPERDEV' };
+const adminWrites = [
+  (service: AdminService, actor: AuthActor, targetId: string) => service.assignRole(actor, targetId, { role: 'DEV' }),
+  (service: AdminService, actor: AuthActor, targetId: string) => service.setDisabled(actor, targetId, true),
+];
+
+test('administrative writes re-read current actor capability inside the transaction, not the stale session role', async () => {
+  for (const write of adminWrites) for (const role of ['USER', 'ADMIN', 'DEV', 'SUPERADMIN'] as Role[]) {
+    const w = world(); w.get(staleBoss.profileId)!.role = role;
+    await assert.rejects(write(new AdminService(w.db), staleBoss, second.id), error(403, 'FORBIDDEN'));
+    assert.deepEqual(w.calls, ['transaction', `lock:${staleBoss.profileId}`]);
+    assert.equal(w.get(second.id)!.role, 'USER'); assert.equal(w.get(second.id)!.active, true); assert.equal(w.changes.length, 0);
+  }
+});
+
+test('disabled or deleted current actors cannot perform either administrative write', async () => {
+  for (const write of adminWrites) for (const removed of [false, true]) {
+    const w = world();
+    if (removed) w.all.splice(w.all.findIndex(p => p.id === staleBoss.profileId), 1);
+    else w.get(staleBoss.profileId)!.active = false;
+    await assert.rejects(write(new AdminService(w.db), staleBoss, second.id), error(401, 'AUTH_REQUIRED'));
+    assert.deepEqual(w.calls, ['transaction', `lock:${staleBoss.profileId}`]);
+    assert.equal(w.get(second.id)!.role, 'USER'); assert.equal(w.get(second.id)!.active, true); assert.equal(w.changes.length, 0);
+  }
+});
+
+test('actor downgrade or disable between authentication and transaction entry is respected', async () => {
+  for (const write of adminWrites) for (const disable of [false, true]) {
+    const w = world();
+    w.controls.beforeTransaction = () => {
+      if (disable) w.get(staleBoss.profileId)!.active = false;
+      else w.get(staleBoss.profileId)!.role = 'USER';
+    };
+    await assert.rejects(write(new AdminService(w.db), staleBoss, second.id), error(disable ? 401 : 403, disable ? 'AUTH_REQUIRED' : 'FORBIDDEN'));
+    assert.deepEqual(w.calls, ['transaction', `lock:${staleBoss.profileId}`]); assert.equal(w.changes.length, 0);
+  }
+});
+
+test('fresh target hierarchy governs both writes and target locks precede mutation', async () => {
+  for (const write of adminWrites) {
+    const w = world(); w.controls.beforeTransaction = () => { w.get(second.id)!.role = 'SUPERDEV'; };
+    await assert.rejects(write(new AdminService(w.db), staleBoss, second.id), error(403, 'FORBIDDEN'));
+    assert.deepEqual(w.calls, ['transaction', `lock:${staleBoss.profileId}`, `lock:${second.id}`]);
+    assert.equal(w.get(second.id)!.active, true); assert.equal(w.changes.length, 0);
+  }
+  const w = world();
+  await new AdminService(w.db).assignRole(staleBoss, second.id, { role: 'DEV', reason: 'fixture' });
+  assert.deepEqual(w.calls, ['transaction', `lock:${staleBoss.profileId}`, `lock:${second.id}`, 'write:role', 'write:audit', 'read:result']);
+});
+
+test('defensive role/active-state guards reject target mismatches without committing a write or audit', async () => {
+  const role = world(); role.controls.beforeRoleWrite = () => { role.get(second.id)!.role = 'SUPERDEV'; };
+  await assert.rejects(new AdminService(role.db).assignRole(staleBoss, second.id, { role: 'DEV' }), error(409, 'SESSION_CONFLICT'));
+  assert.equal(role.get(second.id)!.role, 'USER'); assert.equal(role.changes.length, 0);
+  for (const promote of [false, true]) {
+    const w = world(); w.controls.beforeAccountWrite = () => {
+      if (promote) w.get(second.id)!.role = 'SUPERDEV'; else w.get(second.id)!.active = false;
+    };
+    await assert.rejects(new AdminService(w.db).setDisabled(staleBoss, second.id, true), error(409, 'SESSION_CONFLICT'));
+    assert.equal(w.get(second.id)!.role, 'USER'); assert.equal(w.get(second.id)!.active, true); assert.equal(w.changes.length, 0);
+  }
+});
+
+test('administrative transaction failures roll back role+audit and disabled state in offline simulator', async () => {
+  const audit = world(); audit.controls.failAudit = true;
+  await assert.rejects(new AdminService(audit.db).assignRole(staleBoss, second.id, { role: 'DEV' }), /fixture audit failure/);
+  assert.equal(audit.get(second.id)!.role, 'USER'); assert.equal(audit.changes.length, 0);
+  for (const write of adminWrites) {
+    const w = world(); w.controls.failRead = true;
+    await assert.rejects(write(new AdminService(w.db), staleBoss, second.id), /fixture result failure/);
+    assert.equal(w.get(second.id)!.role, 'USER'); assert.equal(w.get(second.id)!.active, true); assert.equal(w.changes.length, 0);
+  }
+});
+
+test('serialized duplicate role changes have one success and one audit in offline simulator', async () => {
+  const w = world(); const service = new AdminService(w.db);
+  const result = await Promise.allSettled([service.assignRole(staleBoss, second.id, { role: 'DEV' }), service.assignRole(staleBoss, second.id, { role: 'DEV' })]);
+  assert.equal(result.filter(r => r.status === 'fulfilled').length, 1);
+  assert.ok(error(409, 'SESSION_CONFLICT')((result.find(r => r.status === 'rejected') as PromiseRejectedResult).reason));
+  assert.equal(w.changes.length, 1); assert.equal(w.get(second.id)!.role, 'DEV');
+});
 
 test('capabilities per role come from the single catalogue, and ADMIN/DEV/SUPERADMIN hold exactly USER\'s', async () => {
   const s = await serve();
@@ -89,7 +210,8 @@ test('capabilities per role come from the single catalogue, and ADMIN/DEV/SUPERA
     for (const p of people) {
       const { status, body } = await s.call(p, 'GET', '/me');
       assert.equal(status, 200);
-      assert.deepEqual(body.capabilities, [...roleGrants[p.role]]);
+      assert.deepEqual(body.capabilities, roleGrants[p.role].filter(key => key !== 'role_requests.read'));
+      assert.equal(body.roleRequest, null); // new schema is never queried while the feature is off
       assert.equal(body.profile.role, p.role);
       assert.ok(body.capabilities.every((c: string) => c in permissions));
       assert.equal(JSON.stringify(body).includes('passwordHash') || JSON.stringify(body).includes('tokenHash'), false);

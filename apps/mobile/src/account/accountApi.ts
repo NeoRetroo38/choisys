@@ -1,6 +1,6 @@
 import type {
   AdminProfileResponse, AdminProfileRow, AdminProfilesResponse, DeleteMeResponse, ExportResponse, Measurement, MeProfile, MeResponse, Role,
-  RoleChangeRow, RoleChangesResponse, RunHistoryResponse, RunSummary,
+  RoleChangeRow, RoleChangesResponse, RunHistoryResponse, RunSummary, RequestedRole, RoleRequestStatus, RoleRequestSummary, AdminRoleRequestRow,
 } from '@scenarys/shared';
 import { ApiRequestError, apiRequest, type ApiTransport } from '../api/request';
 
@@ -41,9 +41,38 @@ function readRuns(value: unknown): RunSummary[] {
   });
 }
 
-function readMe(value: unknown): MeResponse {
+/**
+ * Public DTOs come from shared; these aliases keep presentation names local to this surface.
+ * The person always starts as USER. An older server simply omits `roleRequest`.
+ */
+export type RequestableRole = RequestedRole;
+export type { RoleRequestStatus } from '@scenarys/shared';
+export type OwnRoleRequest = RoleRequestSummary;
+export type RoleRequestRow = AdminRoleRequestRow;
+export type MeWithRequest = MeResponse;
+
+const statuses: readonly RoleRequestStatus[] = ['PENDING', 'APPROVED', 'REJECTED'];
+const isRequestable = (value: unknown): value is RequestableRole => isRole(value) && value !== 'USER';
+
+function readOwnRequest(value: unknown): OwnRoleRequest | null {
+  if (value === undefined || value === null) return null;
+  if (!record(value) || !isText(value.id) || !isRequestable(value.requestedRole) || !statuses.includes(value.status as RoleRequestStatus) ||
+      !isDate(value.createdAt) || !(value.decidedAt === null || value.decidedAt === undefined || isDate(value.decidedAt))) throw invalid();
+  return { id: value.id, requestedRole: value.requestedRole, status: value.status as RoleRequestStatus, createdAt: value.createdAt,
+    decidedAt: (value.decidedAt ?? null) as string | null };
+}
+
+function readRequestRow(value: unknown): RoleRequestRow {
+  if (!record(value) || !isText(value.id) || !record(value.profile) || !isText(value.profile.id) || !isText(value.profile.displayName, 120) ||
+      !isRole(value.profile.role) || !isRequestable(value.requestedRole) || !statuses.includes(value.status as RoleRequestStatus) ||
+      !isDate(value.createdAt)) throw invalid();
+  return { id: value.id, profile: { id: value.profile.id, displayName: value.profile.displayName, role: value.profile.role },
+    requestedRole: value.requestedRole, status: value.status as RoleRequestStatus, createdAt: value.createdAt };
+}
+
+function readMe(value: unknown): MeWithRequest {
   if (!record(value) || value.ok !== true) throw invalid();
-  return { ok: true, profile: readProfile(value.profile), capabilities: readCapabilities(value.capabilities) };
+  return { ok: true, profile: readProfile(value.profile), capabilities: readCapabilities(value.capabilities), roleRequest: readOwnRequest(value.roleRequest) };
 }
 
 function readAdminProfile(item: unknown): AdminProfileRow {
@@ -53,14 +82,26 @@ function readAdminProfile(item: unknown): AdminProfileRow {
 }
 
 /** Own-account and SUPERDEV endpoints (docs/ROLES.md). The server decides; this client reads and validates. */
-export const adminPaths = { profiles: '/admin/profiles', roleChanges: '/admin/role-changes' } as const;
+export const adminPaths = { profiles: '/admin/profiles', roleChanges: '/admin/role-changes', roleRequests: '/admin/role-requests' } as const;
 
-export function createAccountApi(baseUrl: string | undefined, getToken: () => string | null, transport: ApiTransport = fetch) {
-  const call = (path: string, body?: unknown, maxBytes?: number) =>
-    apiRequest(baseUrl, path, { body, token: getToken(), maxBytes }, transport);
+export function createAccountApi(baseUrl: string | undefined, getToken: () => string | null, transport: ApiTransport = fetch,
+  isCurrent: () => boolean = () => true, onUnauthorized: () => void = () => undefined) {
+  const call = async (path: string, body?: unknown, maxBytes?: number, timeoutMs?: number) => {
+    if (!isCurrent()) throw new ApiRequestError('STALE_SESSION');
+    try {
+      const data = await apiRequest(baseUrl, path, { body, token: getToken(), maxBytes, timeoutMs }, transport);
+      if (!isCurrent()) throw new ApiRequestError('STALE_SESSION');
+      return data;
+    } catch (error) {
+      // An old client's 401 must never clear or revalidate the next person's valid session.
+      if (!isCurrent()) throw new ApiRequestError('STALE_SESSION');
+      if (error instanceof ApiRequestError && error.code === 'AUTH_REQUIRED') onUnauthorized();
+      throw error;
+    }
+  };
   return {
-    async me(): Promise<MeResponse> { return readMe(await call('/me')); },
-    async rename(displayName: string): Promise<MeResponse> { return readMe(await call('/me/profile', { displayName })); },
+    async me(): Promise<MeWithRequest> { return readMe(await call('/me')); },
+    async rename(displayName: string): Promise<MeWithRequest> { return readMe(await call('/me/profile', { displayName })); },
     async runs(): Promise<RunSummary[]> {
       const data = await call('/me/runs', undefined, 1_000_000);
       if (!record(data) || data.ok !== true) throw invalid();
@@ -79,7 +120,7 @@ export function createAccountApi(baseUrl: string | undefined, getToken: () => st
     },
     async health(): Promise<{ service: string; version: string; latencyMs: number }> {
       const started = Date.now();
-      const data = await apiRequest(baseUrl, '/health', { timeoutMs: 5000, maxBytes: 1024 }, transport);
+      const data = await call('/health', undefined, 1024, 5000);
       if (!record(data) || data.ok !== true || !isText(data.service) || !isText(data.version)) throw invalid();
       return { service: data.service, version: data.version, latencyMs: Date.now() - started };
     },
@@ -108,6 +149,19 @@ export function createAccountApi(baseUrl: string | undefined, getToken: () => st
         return { id: item.id, at: item.at, actorId: item.actorId as string | null, targetId: item.targetId as string | null,
           from: item.from as Role | null, to: item.to, reason: (item.reason ?? null) as string | null };
       });
+    },
+    async roleRequests(): Promise<RoleRequestRow[]> {
+      const data = await call(`${adminPaths.roleRequests}?status=PENDING`, undefined, 1_000_000);
+      if (!record(data) || data.ok !== true || !Array.isArray(data.requests)) throw invalid();
+      return data.requests.map(readRequestRow);
+    },
+    /** Approving changes the role on the server and writes the audit entry; the client only reports the decision. */
+    async decideRoleRequest(requestId: string, approve: boolean): Promise<OwnRoleRequest> {
+      const data = await call(`${adminPaths.roleRequests}/${encodeURIComponent(requestId)}/decision`, { approve });
+      if (!record(data) || data.ok !== true) throw invalid();
+      const request = readOwnRequest(data.roleRequest);
+      if (!request || request.id !== requestId || request.status !== (approve ? 'APPROVED' : 'REJECTED')) throw invalid();
+      return request;
     },
   };
 }

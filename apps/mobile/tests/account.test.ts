@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createAccountApi } from '../src/account/accountApi';
 import { capabilitySet, navigationModel } from '../src/account/capabilities';
-import { ApiRequestError } from '../src/api/request';
+import { ApiRequestError, errorMessage } from '../src/api/request';
+import { AccountRefreshGate, AccountSessionScope } from '../src/account/sessionScope';
+import { isLowerRole, roleChoices } from '../src/account/rolePresentation';
+import { AuthClientError, SessionController, type AuthState } from '../src/auth/sessionController';
 
 const user = ['profile.read.own', 'profile.update.own', 'cube_data.read.own', 'cube_data.create.own', 'cube_data.export.own', 'account.delete.own'];
 const superdev = [...user, 'profile.read.any', 'account.disable', 'role.assign', 'role_changes.read', 'cube_data.read.any', 'cube_data.read.technical', 'system.manage'];
@@ -14,11 +17,11 @@ test('navigation follows capabilities, not role names', () => {
   assert.equal(plain.system.visible, false);
 
   const full = navigationModel(capabilitySet(superdev));
-  assert.deepEqual(full.system, { visible: true, status: true, people: true, audit: true, assignRole: true, disable: true });
+  assert.deepEqual(full.system, { visible: true, status: true, people: true, audit: true, requests: false, assignRole: true, disable: true });
 
   // A role that only gains the audit capability sees only that part of the system surface.
   const auditor = navigationModel(capabilitySet([...user, 'role_changes.read']));
-  assert.deepEqual(auditor.system, { visible: true, status: false, people: false, audit: true, assignRole: false, disable: false });
+  assert.deepEqual(auditor.system, { visible: true, status: false, people: false, audit: true, requests: false, assignRole: false, disable: false });
 
   // Nothing granted, nothing shown.
   const none = navigationModel(capabilitySet(null));
@@ -61,4 +64,203 @@ test('run history keeps engine measurements as received', async () => {
 test('the engine port is never accepted as API address', async () => {
   const api = createAccountApi('http://localhost:8765', () => 'tok', reply(200, {}));
   await assert.rejects(api.me(), (error: unknown) => error instanceof ApiRequestError && error.code === 'CONFIGURATION_ERROR');
+});
+
+test('role requests: /me tolerates older servers and the sudev list needs its own capability', async () => {
+  const profile = { id: 'p1', displayName: 'Ana', role: 'USER', createdAt: '2026-10-08T00:00:00Z' };
+  const old = createAccountApi('http://127.0.0.1:3000', () => 'tok', reply(200, { ok: true, profile, capabilities: user }));
+  assert.equal((await old.me()).roleRequest, null);
+
+  const pending = { id: 'rq1', requestedRole: 'DEV', status: 'PENDING', createdAt: '2026-10-08T00:00:00Z', decidedAt: null };
+  const withRequest = createAccountApi('http://127.0.0.1:3000', () => 'tok', reply(200, { ok: true, profile, capabilities: user, roleRequest: pending }));
+  assert.deepEqual((await withRequest.me()).roleRequest, pending);
+
+  // USER is never something you request.
+  const bad = createAccountApi('http://127.0.0.1:3000', () => 'tok', reply(200, { ok: true, profile, capabilities: user, roleRequest: { ...pending, requestedRole: 'USER' } }));
+  await assert.rejects(bad.me(), (error: unknown) => error instanceof ApiRequestError && error.code === 'INVALID_RESPONSE');
+
+  let path = '';
+  const list = createAccountApi('http://127.0.0.1:3000', () => 'tok', async url => {
+    path = String(url);
+    return reply(200, { ok: true, requests: [{ id: 'rq1', profile: { id: 'p1', displayName: 'Ana', role: 'USER' }, requestedRole: 'DEV', status: 'PENDING', createdAt: '2026-10-08T00:00:00Z' }] })();
+  });
+  assert.equal((await list.roleRequests())[0].requestedRole, 'DEV');
+  assert.match(path, /\/admin\/role-requests\?status=PENDING$/);
+
+  assert.equal(navigationModel(capabilitySet(user)).system.requests, false);
+  const reviewer = navigationModel(capabilitySet([...user, 'role_requests.read']));
+  assert.equal(reviewer.system.visible, true);
+  assert.equal(reviewer.system.assignRole, false); // can see requests, cannot decide them
+});
+
+const signedIn = (token: string, id = 'p1'): AuthState => ({
+  status: 'signedIn', token, profile: { id, displayName: 'Ana' }, error: null,
+});
+
+test('account scope never restores old capabilities after logout or account switch', () => {
+  const scope = new AccountSessionScope();
+  const first = signedIn('session-a');
+  const ticket = scope.capture(first);
+  assert.equal(scope.isCurrent(ticket, first), true);
+  scope.observe({ status: 'signedOut', token: null, profile: null, error: null });
+  assert.equal(scope.isCurrent(ticket, first), false); // even logging back in with the same token
+  assert.equal(scope.isCurrent(scope.capture(first), signedIn('session-b', 'p2')), false);
+  const next = signedIn('session-b', 'p2');
+  const nextTicket = scope.capture(next);
+  assert.equal(scope.isCurrent(nextTicket, { ...next, status: 'loading' }), false);
+  assert.equal(scope.isCurrent(nextTicket, next), false); // revalidation is a new lifecycle
+});
+
+test('initial and focused refreshes join one request, never another account or later focus', async () => {
+  const gate = new AccountRefreshGate();
+  let resolve!: () => void;
+  const delayed = new Promise<void>(finish => { resolve = finish; });
+  let calls = 0;
+  const load = () => { calls++; return delayed; };
+  const initial = gate.run(1, load);
+  assert.equal(gate.run(1, load), initial);
+  await Promise.resolve();
+  assert.equal(calls, 1);
+  const otherAccount = gate.run(2, async () => { calls++; });
+  assert.notEqual(otherAccount, initial);
+  resolve();
+  await Promise.all([initial, otherAccount]);
+  await gate.run(2, async () => { calls++; });
+  assert.equal(calls, 3); // returning to the route after completion really refreshes
+  const previous = gate.run(2, async () => undefined);
+  gate.clear(); // logout/unmount, even before the old promise settles
+  assert.notEqual(gate.run(2, async () => undefined), previous);
+});
+
+test('a batched auth lifecycle changes the consumer boundary even for the same profile and token', () => {
+  const scope = new AccountSessionScope();
+  const auth = signedIn('session-a');
+  const original = scope.capture(auth);
+  assert.equal(scope.capture(auth), original); // data-only renders must not recreate the API or restart /me
+  // The provider observes controller events synchronously; React need not render either intermediate state.
+  scope.observe({ ...auth, status: 'loading' });
+  scope.observe({ status: 'signedOut', token: null, profile: null, error: null });
+  scope.observe(auth);
+  const next = scope.capture(auth);
+  assert.notEqual(next, original); // same auth primitives/object, fresh ticket without a React useMemo
+  assert.notEqual(next.id, original.id); // Fragment key={ticket.id} remounts every account/system consumer
+  assert.equal(scope.capture(auth), next); // following data renders remain stable
+  assert.equal(scope.isCurrent(next, auth), true);
+  assert.equal(scope.isCurrent(original, auth), false);
+});
+
+test('AUTH_REQUIRED from any current account endpoint revalidates and clears an invalid session', async () => {
+  let stored: string | null = 'session-a';
+  let invalid = false;
+  const controller = new SessionController({
+    signIn: async () => { throw new Error('not used'); }, register: async () => { throw new Error('not used'); },
+    signOut: async () => undefined,
+    me: async () => {
+      if (invalid) throw new AuthClientError('AUTH_REQUIRED');
+      return { ok: true, expiresAt: '2026-11-01T00:00:00Z', profile: { id: 'p1', displayName: 'Ana' } };
+    },
+  }, { getItem: async () => stored, setItem: async token => { stored = token; }, deleteItem: async () => { stored = null; } });
+  await controller.bootstrap();
+  const scope = new AccountSessionScope();
+  const ticket = scope.capture(controller.getState());
+  const unsubscribe = controller.subscribe(next => { scope.observe(next); });
+  let revalidation: Promise<void> | undefined;
+  invalid = true;
+  const api = createAccountApi('http://127.0.0.1:3000', () => ticket.token,
+    reply(401, { ok: false, error: { code: 'AUTH_REQUIRED' } }), () => scope.isCurrent(ticket, controller.getState()),
+    () => { revalidation = controller.bootstrap(); });
+  await assert.rejects(api.runs(), (error: unknown) => error instanceof ApiRequestError && error.code === 'AUTH_REQUIRED');
+  assert.ok(revalidation);
+  await revalidation;
+  assert.equal(controller.getState().status, 'signedOut');
+  assert.equal(stored, null);
+  unsubscribe();
+});
+
+test('late and concurrent unauthorized errors cannot revalidate a newer session twice', async () => {
+  const scope = new AccountSessionScope();
+  let auth = signedIn('session-a');
+  const ticket = scope.capture(auth);
+  let resolve!: (response: Response) => void;
+  const delayed = new Promise<Response>(finish => { resolve = finish; });
+  let revalidations = 0;
+  const stale = createAccountApi('http://127.0.0.1:3000', () => ticket.token, () => delayed,
+    () => scope.isCurrent(ticket, auth), () => { revalidations++; });
+  const oldResponse = stale.export();
+  auth = signedIn('session-b', 'p2'); scope.observe(auth);
+  resolve(await reply(401, { ok: false, error: { code: 'AUTH_REQUIRED' } })());
+  await assert.rejects(oldResponse, (error: unknown) => error instanceof ApiRequestError && error.code === 'STALE_SESSION');
+  assert.equal(revalidations, 0);
+  const nextTicket = scope.capture(auth);
+  const current = createAccountApi('http://127.0.0.1:3000', () => nextTicket.token,
+    reply(401, { ok: false, error: { code: 'AUTH_REQUIRED' } }), () => scope.isCurrent(nextTicket, auth), () => {
+      revalidations++; auth = { ...auth, status: 'loading' }; scope.observe(auth);
+    });
+  await Promise.allSettled([current.profiles(), current.roleRequests(), current.decideRoleRequest('rq1', true)]);
+  assert.equal(revalidations, 1);
+});
+
+test('an incorrect deletion password does not revalidate a valid session', async () => {
+  let revalidations = 0;
+  const api = createAccountApi('http://127.0.0.1:3000', () => 'session-a',
+    reply(401, { ok: false, error: { code: 'INVALID_CREDENTIALS' } }), () => true, () => { revalidations++; });
+  await assert.rejects(api.deleteAccount('incorrect'), (error: unknown) => error instanceof ApiRequestError && error.code === 'INVALID_CREDENTIALS');
+  assert.equal(revalidations, 0);
+});
+
+test('a late account response is discarded after logout, including a delayed body', async () => {
+  for (const next of [{ status: 'signedOut', token: null, profile: null, error: null } as AuthState, signedIn('session-b', 'p2')]) {
+    const scope = new AccountSessionScope();
+    let auth = signedIn('session-a');
+    const ticket = scope.capture(auth);
+    let finish!: (value: string) => void;
+    const body = new Promise<string>(resolve => { finish = resolve; });
+    let requests = 0;
+    const api = createAccountApi('http://127.0.0.1:3000', () => ticket.token, async (_url, init) => {
+      requests++;
+      assert.equal((init?.headers as Record<string, string>).Authorization, 'Bearer session-a');
+      const response = new Response();
+      response.text = () => body;
+      return response;
+    }, () => scope.isCurrent(ticket, auth));
+    const pending = api.me();
+    auth = next;
+    scope.observe(auth);
+    finish(JSON.stringify({ ok: true, profile: { id: 'p1', displayName: 'Old account', role: 'SUPERDEV', createdAt: '2026-10-08T00:00:00Z' }, capabilities: superdev }));
+    await assert.rejects(pending, (error: unknown) => error instanceof ApiRequestError && error.code === 'STALE_SESSION');
+    await assert.rejects(api.export(), (error: unknown) => error instanceof ApiRequestError && error.code === 'STALE_SESSION');
+    assert.equal(requests, 1); // an old surface cannot send a new request under either person's token
+  }
+});
+
+test('role choices hide equal or higher roles and equal/higher target accounts', () => {
+  assert.deepEqual(roleChoices('SUPERDEV', 'USER'), ['ADMIN', 'DEV', 'SUPERADMIN']);
+  assert.deepEqual(roleChoices('SUPERDEV', 'SUPERDEV'), []);
+  assert.deepEqual(roleChoices('DEV', 'USER'), ['ADMIN']);
+  assert.deepEqual(roleChoices('USER', 'SUPERDEV'), []);
+  assert.deepEqual(roleChoices(undefined, 'USER'), []);
+  assert.equal(isLowerRole('SUPERDEV', 'SUPERDEV'), false); // may reject USER's request, never approve SUPERDEV
+  assert.equal(isLowerRole('SUPERDEV', 'USER'), true);
+  assert.equal(navigationModel(capabilitySet(user)).system.assignRole, false);
+});
+
+test('request decisions validate the returned request and keep useful 503/409 errors', async () => {
+  const roleRequest = { id: 'rq1', requestedRole: 'DEV', status: 'APPROVED', createdAt: '2026-10-08T00:00:00Z', decidedAt: '2026-10-08T01:00:00Z' };
+  const api = createAccountApi('http://127.0.0.1:3000', () => 'tok', reply(200, { ok: true, roleRequest }));
+  assert.deepEqual(await api.decideRoleRequest('rq1', true), roleRequest);
+  for (const value of [undefined, { ...roleRequest, id: 'another' }, { ...roleRequest, status: 'PENDING' }]) {
+    const bad = createAccountApi('http://127.0.0.1:3000', () => 'tok', reply(200, { ok: true, roleRequest: value }));
+    await assert.rejects(bad.decideRoleRequest('rq1', true), (error: unknown) => error instanceof ApiRequestError && error.code === 'INVALID_RESPONSE');
+  }
+  for (const [status, code, message] of [[503, 'ROLE_REQUESTS_UNAVAILABLE', /registrarte como usuario/],
+    [409, 'ALREADY_DECIDED', /ya se resolvió/], [409, 'SESSION_CONFLICT', /Actualiza/]] as const) {
+    const unavailable = createAccountApi('http://127.0.0.1:3000', () => 'tok', reply(status, { ok: false, error: { code, message: 'private diagnostic' } }));
+    await assert.rejects(unavailable.decideRoleRequest('rq1', true), (error: unknown) => {
+      assert.ok(error instanceof ApiRequestError);
+      assert.equal(error.code, code);
+      assert.match(errorMessage(error), message);
+      assert.equal(errorMessage(error).includes('private diagnostic'), false);
+      return true;
+    });
+  }
 });

@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
-import { router } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
 import { StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import type { RunSummary } from '@scenarys/shared';
 import { useAccount } from '../account/AccountProvider';
+import { roleLabel } from '../account/capabilities';
 import { deliverExport } from '../account/exportData';
 import { errorMessage } from '../api/request';
 import { useAuth } from '../auth/AuthProvider';
@@ -25,7 +26,14 @@ export default function Account() {
   const [busy, setBusy] = useState<'export' | 'delete' | null>(null);
   const [password, setPassword] = useState<string | null>(null);
   const back = () => router.canGoBack() ? router.back() : router.replace('/');
-  const { model, profile, api } = account;
+  const { model, profile, api, roleRequest } = account;
+  const refresh = account.refresh;
+  useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
+  const requestLine = roleRequest && {
+    PENDING: `Pediste ${roleLabel[roleRequest.requestedRole]}. Un sudev lo revisará; mientras, eres usuario.`,
+    APPROVED: `Tu solicitud de ${roleLabel[roleRequest.requestedRole]} fue aprobada.`,
+    REJECTED: `Tu solicitud de ${roleLabel[roleRequest.requestedRole]} no se aprobó. Sigues como ${roleLabel[profile?.role ?? 'USER']}.`,
+  }[roleRequest.status];
 
   useEffect(() => {
     if (!model.account.history) return;
@@ -63,9 +71,11 @@ export default function Account() {
     <Screen title="tú" onBack={back}>
       <ProfileHeader name={profile.displayName} role={profile.role} since={profile.createdAt}
         onRename={model.account.rename ? async name => {
-          try { const me = await api.rename(name); account.setProfile(me.profile, me.capabilities); }
+          try { const me = await api.rename(name); account.setProfile(me.profile, me.capabilities, me.roleRequest); }
           catch (error) { setNotice(errorMessage(error)); }
         } : undefined} />
+
+      {requestLine && <Text accessibilityLiveRegion="polite" style={styles.request}>{requestLine}</Text>}
 
       {notice && <EmptyState alert text={notice} />}
 
@@ -101,6 +111,7 @@ export default function Account() {
 
 const styles = StyleSheet.create({
   cube: { backgroundColor: color.night, marginHorizontal: -space.m, paddingVertical: space.m, alignItems: 'center', marginBottom: space.s },
+  request: { fontSize: 13, lineHeight: 19, color: color.muted, fontFamily: font.text, paddingVertical: space.s, marginBottom: space.m, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.line },
   confirmDelete: { paddingTop: space.s },
   deleteText: { fontSize: 13, color: color.danger, fontFamily: font.text },
   password: { borderBottomWidth: 1, borderBottomColor: color.ink, fontSize: 16, paddingVertical: space.s, marginVertical: space.s, fontFamily: font.text, outlineStyle: 'none' } as object,

@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react';
 import { router } from 'expo-router';
 import type { AdminProfileRow, RoleChangeRow } from '@scenarys/shared';
 import { useAccount } from '../account/AccountProvider';
+import type { RoleRequestRow as RequestRow } from '../account/accountApi';
 import { errorMessage } from '../api/request';
 import AuditRow from '../ui/AuditRow';
 import CapabilityGate from '../ui/CapabilityGate';
 import EmptyState from '../ui/EmptyState';
 import ProfileControls from '../ui/ProfileControls';
+import RoleRequestRow from '../ui/RoleRequestRow';
 import Screen from '../ui/Screen';
 import Section from '../ui/Section';
 import SystemStatus, { type ServiceState } from '../ui/SystemStatus';
@@ -15,10 +17,12 @@ type Loaded<T> = { data: T } | { error: string } | null;
 
 /** The control surface. Each part appears only if the API granted its capability, and each request is still checked by the server. */
 export default function System() {
-  const { api, capabilities, model, status } = useAccount();
+  const { api, capabilities, model, status, profile } = useAccount();
   const [health, setHealth] = useState<ServiceState[]>([{ name: 'api', state: 'checking' }]);
   const [people, setPeople] = useState<Loaded<AdminProfileRow[]>>(null);
   const [audit, setAudit] = useState<Loaded<RoleChangeRow[]>>(null);
+  const [requests, setRequests] = useState<Loaded<RequestRow[]>>(null);
+  const [requestNotice, setRequestNotice] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   /** Applies one admin action and replaces that row with what the server returns; audit reloads to show it. */
   async function act(action: () => Promise<AdminProfileRow>) {
@@ -29,6 +33,16 @@ export default function System() {
       if (model.system.audit) api.roleChanges().then(data => setAudit({ data }), () => undefined);
     } catch (error) { setNotice(errorMessage(error)); }
   }
+  /** A decision removes the request; profiles and audit reload because an approval changes a role. */
+  async function decide(request: RequestRow, approve: boolean) {
+    setRequestNotice(null);
+    try {
+      await api.decideRoleRequest(request.id, approve);
+      setRequests(current => current && 'data' in current ? { data: current.data.filter(row => row.id !== request.id) } : current);
+      if (approve && model.system.people) api.profiles().then(data => setPeople({ data }), () => undefined);
+      if (approve && model.system.audit) api.roleChanges().then(data => setAudit({ data }), () => undefined);
+    } catch (error) { setRequestNotice(errorMessage(error)); }
+  }
   const back = () => router.canGoBack() ? router.back() : router.replace('/account');
 
   useEffect(() => {
@@ -37,7 +51,8 @@ export default function System() {
       () => setHealth([{ name: 'api', state: 'down' }]));
     if (model.system.people) api.profiles().then(data => setPeople({ data }), error => setPeople({ error: errorMessage(error) }));
     if (model.system.audit) api.roleChanges().then(data => setAudit({ data }), error => setAudit({ error: errorMessage(error) }));
-  }, [api, model.system.status, model.system.people, model.system.audit]);
+    if (model.system.requests) api.roleRequests().then(data => setRequests({ data }), error => setRequests({ error: errorMessage(error) }));
+  }, [api, model.system.status, model.system.people, model.system.audit, model.system.requests]);
 
   if (status === 'loading') return <Screen title="sistema" onBack={back}><EmptyState text="…" /></Screen>;
   if (!model.system.visible) return <Screen title="sistema" onBack={back}><EmptyState text="Tu cuenta no tiene acceso a esta parte." /></Screen>;
@@ -51,11 +66,21 @@ export default function System() {
         <Section label="salud"><SystemStatus services={health} /></Section>
       </CapabilityGate>
 
+      <CapabilityGate capabilities={capabilities} need="role_requests.read">
+        <Section label="solicitudes">
+          {requests === null ? <EmptyState text="…" /> : 'error' in requests ? <EmptyState alert text={requests.error} /> :
+            requests.data.length === 0 ? <EmptyState text="Nadie espera un rol." /> :
+            requests.data.map(request => <RoleRequestRow key={request.id} request={request} actorRole={profile?.role}
+              onDecide={model.system.assignRole ? approve => decide(request, approve) : undefined} />)}
+          {requestNotice && <EmptyState alert text={requestNotice} />}
+        </Section>
+      </CapabilityGate>
+
       <CapabilityGate capabilities={capabilities} need="profile.read.any">
         <Section label="perfiles">
           {people === null ? <EmptyState text="…" /> : 'error' in people ? <EmptyState alert text={people.error} /> :
             people.data.length === 0 ? <EmptyState text="No hay perfiles." /> :
-            people.data.map(person => <ProfileControls key={person.id} person={person}
+            people.data.map(person => <ProfileControls key={person.id} person={person} actorRole={profile?.role}
               onAssignRole={model.system.assignRole ? role => act(() => api.assignRole(person.id, role)) : undefined}
               onSetDisabled={model.system.disable ? disabled => act(() => api.setDisabled(person.id, disabled)) : undefined} />)}
           {notice && <EmptyState alert text={notice} />}

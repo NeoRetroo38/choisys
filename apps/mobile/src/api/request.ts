@@ -66,6 +66,9 @@ export function errorMessage(error: unknown): string {
     case 'FORBIDDEN': return 'Tu cuenta no tiene permiso para esto.';
     case 'INVALID_CREDENTIALS': return 'La contraseña no es correcta.';
     case 'NOT_FOUND': return 'Esta parte aún no está disponible en el servidor.';
+    case 'ROLE_REQUESTS_UNAVAILABLE': return 'Las solicitudes de rol no están disponibles. Puedes registrarte como usuario.';
+    case 'ALREADY_DECIDED': return 'Esta solicitud ya se resolvió. Actualiza la lista.';
+    case 'SESSION_CONFLICT': return 'El perfil cambió durante la petición. Actualiza y vuelve a intentarlo.';
     case 'RATE_LIMITED': case 'AUTH_RATE_LIMITED': return 'Demasiadas peticiones. Espera un momento.';
     case 'REQUEST_TIMEOUT': return 'El servidor tarda demasiado. Vuelve a intentarlo.';
     case 'CONFIGURATION_ERROR': return 'Falta configurar la dirección del servidor (EXPO_PUBLIC_API_URL).';

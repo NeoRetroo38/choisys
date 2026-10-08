@@ -1,4 +1,5 @@
 import type { PrismaClient, Role } from '@prisma/client';
+import type { RequestedRole } from '@scenarys/shared';
 
 export interface AuthAccount {
   id: string;
@@ -13,7 +14,7 @@ export interface AuthSessionRecord {
   expiresAt: Date;
   account: AuthAccount;
 }
-export interface NewAccount { email: string; passwordHash: string; displayName: string }
+export interface NewAccount { email: string; passwordHash: string; displayName: string; requestedRole?: RequestedRole }
 export interface NewAuthSession { tokenHash: string; expiresAt: Date; now: Date }
 
 /** The repository is persistent in production; injectable stores are reserved for tests. */
@@ -35,13 +36,15 @@ export class PrismaAuthRepository implements AuthRepository {
   constructor(private readonly db: PrismaClient) {}
 
   register(account: NewAccount, session: NewAuthSession): Promise<AuthSessionRecord> {
-    // One nested write creates the account, profile and first login atomically.
+    // One nested write creates account, USER profile, optional PENDING request and first login atomically.
     return this.db.accountSession.create({
       data: {
         tokenHash: session.tokenHash, expiresAt: session.expiresAt, lastSeenAt: session.now,
         account: { create: {
           email: account.email, passwordHash: account.passwordHash, lastLoginAt: session.now,
-          profile: { create: { displayName: account.displayName, role: 'USER' } },
+          profile: { create: { displayName: account.displayName, role: 'USER',
+            ...(account.requestedRole ? { roleRequests: { create: { requestedRole: account.requestedRole } } } : {}),
+          } },
         } },
       },
       select: sessionSelect,

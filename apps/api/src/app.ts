@@ -15,6 +15,8 @@ import { adminRoutes } from './adminRoutes.js';
 import { requestContext, type ConnectionRegistry } from './connections.js';
 import { connectionRoutes } from './connectionRoutes.js';
 import { RateLimiter as MeLimiter } from './rateLimit.js';
+import type { RoleRequestService } from './services/roleRequestService.js';
+import { roleRequestRoutes } from './roleRequestRoutes.js';
 export interface AppDependencies {
   auth?: AuthService | null;
   /** Test harness only. Runtime bootstrap always requires account authentication. */
@@ -29,6 +31,8 @@ export interface AppDependencies {
   admin?: AdminService;
   /** Live list of connected clients (/admin/connections, /live). */
   connections?: ConnectionRegistry;
+  /** Explicit opt-in after the role-request schema is ready; absent means routes are not mounted. */
+  roleRequests?: RoleRequestService;
 }
 export function createApp(config: ApiConfig, cube: CubeClient = new NeoCubeClient(config.token, config.timeoutMs), dependencies: AppDependencies = {}) {
   const app = express();
@@ -64,6 +68,8 @@ export function createApp(config: ApiConfig, cube: CubeClient = new NeoCubeClien
   if (dependencies.me) app.use(meRoutes(dependencies.auth ?? null, dependencies.me, dependencies.productLimiter ?? new MeLimiter()));
   if (dependencies.connections) app.use(connectionRoutes(dependencies.auth ?? null, dependencies.connections, dependencies.productLimiter ?? new MeLimiter()));
   if (dependencies.admin) app.use(adminRoutes(dependencies.auth ?? null, dependencies.admin, dependencies.productLimiter ?? new MeLimiter()));
+  if (dependencies.roleRequests) app.use(roleRequestRoutes(dependencies.auth ?? null, dependencies.roleRequests,
+    dependencies.productLimiter ?? new MeLimiter(), !dependencies.me));
   app.use((_req, _res, next) => next(new ApiError(404, 'NOT_FOUND')));
   const errors: ErrorRequestHandler = (error: unknown, _req, res, _next) => {
     let safe = error instanceof ApiError ? error : new ApiError(500, 'INTERNAL_ERROR');
