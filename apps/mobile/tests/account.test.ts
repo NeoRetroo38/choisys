@@ -14,11 +14,11 @@ test('navigation follows capabilities, not role names', () => {
   assert.equal(plain.system.visible, false);
 
   const full = navigationModel(capabilitySet(superdev));
-  assert.deepEqual(full.system, { visible: true, status: true, people: true, audit: true, assignRole: true, disable: true });
+  assert.deepEqual(full.system, { visible: true, status: true, people: true, audit: true, requests: false, assignRole: true, disable: true });
 
   // A role that only gains the audit capability sees only that part of the system surface.
   const auditor = navigationModel(capabilitySet([...user, 'role_changes.read']));
-  assert.deepEqual(auditor.system, { visible: true, status: false, people: false, audit: true, assignRole: false, disable: false });
+  assert.deepEqual(auditor.system, { visible: true, status: false, people: false, audit: true, requests: false, assignRole: false, disable: false });
 
   // Nothing granted, nothing shown.
   const none = navigationModel(capabilitySet(null));
@@ -61,4 +61,31 @@ test('run history keeps engine measurements as received', async () => {
 test('the engine port is never accepted as API address', async () => {
   const api = createAccountApi('http://localhost:8765', () => 'tok', reply(200, {}));
   await assert.rejects(api.me(), (error: unknown) => error instanceof ApiRequestError && error.code === 'CONFIGURATION_ERROR');
+});
+
+test('role requests: /me tolerates older servers and the sudev list needs its own capability', async () => {
+  const profile = { id: 'p1', displayName: 'Ana', role: 'USER', createdAt: '2026-10-08T00:00:00Z' };
+  const old = createAccountApi('http://127.0.0.1:3000', () => 'tok', reply(200, { ok: true, profile, capabilities: user }));
+  assert.equal((await old.me()).roleRequest, null);
+
+  const pending = { id: 'rq1', requestedRole: 'DEV', status: 'PENDING', createdAt: '2026-10-08T00:00:00Z', decidedAt: null };
+  const withRequest = createAccountApi('http://127.0.0.1:3000', () => 'tok', reply(200, { ok: true, profile, capabilities: user, roleRequest: pending }));
+  assert.deepEqual((await withRequest.me()).roleRequest, pending);
+
+  // USER is never something you request.
+  const bad = createAccountApi('http://127.0.0.1:3000', () => 'tok', reply(200, { ok: true, profile, capabilities: user, roleRequest: { ...pending, requestedRole: 'USER' } }));
+  await assert.rejects(bad.me(), (error: unknown) => error instanceof ApiRequestError && error.code === 'INVALID_RESPONSE');
+
+  let path = '';
+  const list = createAccountApi('http://127.0.0.1:3000', () => 'tok', async url => {
+    path = String(url);
+    return reply(200, { ok: true, requests: [{ id: 'rq1', profile: { id: 'p1', displayName: 'Ana', role: 'USER' }, requestedRole: 'DEV', status: 'PENDING', createdAt: '2026-10-08T00:00:00Z' }] })();
+  });
+  assert.equal((await list.roleRequests())[0].requestedRole, 'DEV');
+  assert.match(path, /\/admin\/role-requests\?status=PENDING$/);
+
+  assert.equal(navigationModel(capabilitySet(user)).system.requests, false);
+  const reviewer = navigationModel(capabilitySet([...user, 'role_requests.read']));
+  assert.equal(reviewer.system.visible, true);
+  assert.equal(reviewer.system.assignRole, false); // can see requests, cannot decide them
 });

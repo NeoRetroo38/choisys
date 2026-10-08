@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { roleLabel } from '../account/capabilities';
+import { roleLabel, roleMeaning } from '../account/capabilities';
 import type { RegisterCredentials } from '../auth/sessionController';
 import { useAuth } from '../auth/AuthProvider';
 import AuthScreen from '../screens/AuthScreen';
@@ -9,7 +9,7 @@ import AuthScreen from '../screens/AuthScreen';
  * rejects unknown fields, so the choice only appears when EXPO_PUBLIC_ROLE_REQUESTS=1.
  */
 const roleRequests = process.env.EXPO_PUBLIC_ROLE_REQUESTS === '1';
-const roleOptions = (['USER', 'ADMIN', 'DEV', 'SUPERDEV'] as const).map(value => ({ value, label: roleLabel[value] }));
+const roleOptions = (['USER', 'ADMIN', 'DEV', 'SUPERDEV'] as const).map(value => ({ value, label: roleLabel[value], meaning: roleMeaning[value] }));
 
 export default function Register() {
   const { state, controller } = useAuth();
