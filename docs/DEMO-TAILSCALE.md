@@ -1,5 +1,8 @@
 # Demo remota por Tailscale
 
+> Para el reparto completo entre equipos —PC como servidor y Mac como consola—
+> consulta [`PC-HOST-MAC-CONSOLE.md`](PC-HOST-MAC-CONSOLE.md).
+
 Objetivo: enseñar choisys (bienvenida de Scenarys → inicio de sesión → Run → cubo) desde Safari en el
 iPhone o el Mac, **en cualquier sitio**, sin abrir nada a internet.
 
