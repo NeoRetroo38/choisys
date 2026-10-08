@@ -58,7 +58,7 @@ test('a person sees and exports only their own runs', async () => {
 test('/me lists the permissions of the role, and a rename changes only the own profile', async () => {
   const { service, state } = await fakeDb();
   const me = await service.me({ profileId: 'a', role: 'USER' });
-  assert.ok(me.permissions.includes('account.delete.own') && !me.permissions.includes('role.assign'));
+  assert.ok(me.capabilities.includes('account.delete.own') && !me.capabilities.includes('role.assign'));
   await service.rename({ profileId: 'a', role: 'USER' }, 'Ana M.');
   assert.deepEqual(state.profiles.map(p => p.displayName), ['Ana M.', 'Beto']);
 });

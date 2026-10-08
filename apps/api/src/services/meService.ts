@@ -24,7 +24,7 @@ export class MeService {
 
   async me(actor: AuthActor): Promise<MeResponse> {
     const profile = await this.profile(actor);
-    return { ok: true, profile, permissions: permissionsFor(profile.role) };
+    return { ok: true, profile, capabilities: permissionsFor(profile.role) };
   }
 
   async rename(actor: AuthActor, displayName: string): Promise<MeResponse> {

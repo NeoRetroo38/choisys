@@ -57,7 +57,8 @@ export interface ApiErrorResponse {
 export type Role = 'USER' | 'ADMIN' | 'DEV' | 'SUPERADMIN' | 'SUPERDEV';
 /** Own account, as the person sees it (GET /me). */
 export interface MeProfile { id: string; displayName: string; role: Role; createdAt: string }
-export interface MeResponse { ok: true; profile: MeProfile; permissions: string[] }
+/** What the signed-in person may do, by public capability name. The UI shows or hides; the API always decides. */
+export interface MeResponse { ok: true; profile: MeProfile; capabilities: string[] }
 export interface UpdateMeRequest { displayName: string }
 /** One finished (or abandoned) run in the person's own history. Only values returned by the engine are stored. */
 export interface RunSummary {
@@ -75,6 +76,8 @@ export interface DeleteMeResponse { ok: true }
 /** SUPERDEV only. */
 export interface AdminProfileRow extends MeProfile { disabled: boolean; runCount: number }
 export interface AdminProfilesResponse { ok: true; profiles: AdminProfileRow[] }
-export interface AssignRoleRequest { role: Role }
-export interface RoleChangeRow { id: string; at: string; actorId: string | null; targetId: string | null; from: Role; to: Role }
+export interface AssignRoleRequest { role: Role; reason?: string }
+export interface DisableProfileRequest { disabled: boolean }
+export interface AdminProfileResponse { ok: true; profile: AdminProfileRow }
+export interface RoleChangeRow { id: string; at: string; actorId: string | null; targetId: string | null; from: Role | null; to: Role; reason: string | null }
 export interface RoleChangesResponse { ok: true; changes: RoleChangeRow[] }
