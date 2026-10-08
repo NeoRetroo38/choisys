@@ -6,6 +6,7 @@ import { useAccount } from '../account/AccountProvider';
 import { roleLabel } from '../account/capabilities';
 import { deliverExport } from '../account/exportData';
 import { errorMessage } from '../api/request';
+import { CONTACT_PHONE, useCopyPhone } from '../contact';
 import { useAuth } from '../auth/AuthProvider';
 import type { RunMeasurements } from '../history/runHistory';
 import CubeView from '../screens/CubeView';
@@ -25,6 +26,7 @@ export default function Account() {
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<'export' | 'delete' | null>(null);
   const [password, setPassword] = useState<string | null>(null);
+  const [copied, copyPhone] = useCopyPhone();
   const back = () => router.canGoBack() ? router.back() : router.replace('/');
   const { model, profile, api, roleRequest } = account;
   const refresh = account.refresh;
@@ -91,6 +93,11 @@ export default function Account() {
           busy={busy === 'export'} onPress={() => void exportData()} />}
         {model.system.visible && <ActionRow label="Sistema" value="→" onPress={() => router.push('/system')} />}
       </Section>}
+
+      <Section label="contacto">
+        <ActionRow label="Teléfono de Scenarys" detail={copied ? 'Copiado' : 'Toca para copiarlo'} value={CONTACT_PHONE.label}
+          onPress={copyPhone} accessibilityHint="Copia el número al portapapeles" />
+      </Section>
 
       <Section label="sesión">
         <ActionRow label="Cerrar sesión" onPress={() => void controller.signOut()} />

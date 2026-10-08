@@ -4,6 +4,7 @@ import {
   StyleSheet, Text, TextInput, View, useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CONTACT_PHONE, useCopyPhone } from '../contact';
 import RoleChoice, { type RoleOption } from '../ui/RoleChoice';
 import { inputChrome } from '../ui/theme';
 
@@ -28,6 +29,7 @@ export default function AuthScreen({ mode, busy, error, onSubmit, onModeChange, 
   const emailInput = useRef<TextInput>(null);
   const passwordInput = useRef<TextInput>(null);
   const register = mode === 'register';
+  const [copied, copyPhone] = useCopyPhone();
 
   // Switching between login and register clears the password and any validation message.
   const [shownMode, setShownMode] = useState(mode);
@@ -123,6 +125,13 @@ export default function AuthScreen({ mode, busy, error, onSubmit, onModeChange, 
               <Text style={styles.switchLink}>{register ? 'Inicia sesión' : 'Regístrate'}</Text>
             </Text>
           </Pressable>
+
+          <Pressable accessibilityRole="button" accessibilityLabel={`Copiar el teléfono de Scenarys, ${CONTACT_PHONE.label}`}
+            onPress={copyPhone} style={({ pressed }) => [styles.contact, pressed && styles.pressed]}>
+            <Text accessibilityLiveRegion="polite" style={styles.contactText}>
+              {copied ? 'Copiado: ' : '¿Dudas? '}<Text style={styles.contactLink}>{CONTACT_PHONE.label}</Text>
+            </Text>
+          </Pressable>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -147,6 +156,9 @@ const styles = StyleSheet.create({
   switchMode: { minHeight: 48, paddingVertical: 16, alignItems: 'center', justifyContent: 'center', marginTop: 13 },
   switchText: { color: '#666666', fontSize: 13, lineHeight: 21, textAlign: 'center' },
   switchLink: { color: '#000000', textDecorationLine: 'underline' },
+  contact: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },
+  contactText: { color: '#666666', fontSize: 12, lineHeight: 18, textAlign: 'center' },
+  contactLink: { color: '#000000', fontVariant: ['tabular-nums'] },
   roleHint: { marginTop: 10, color: '#666666', fontSize: 12, lineHeight: 18 },
   disabled: { opacity: 0.5 },
   pressed: { opacity: 0.65 },
