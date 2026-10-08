@@ -10,6 +10,7 @@ import { AuthService } from '../src/auth/authService.js';
 import { readConfig } from '../src/config.js';
 import { permissions, roleGrants, type PermissionKey } from '../src/permissions.js';
 import { AdminService } from '../src/services/adminService.js';
+import { ConnectionRegistry, deviceLabel } from '../src/connections.js';
 import { MeService } from '../src/services/meService.js';
 
 const day = new Date('2026-10-08T10:00:00Z');
@@ -66,7 +67,9 @@ function world() {
 async function serve() {
   const w = world();
   const config = readConfig({ CHOISYS_LOCAL_API_TOKEN: 'x'.repeat(40) });
-  const server = createApp(config, undefined, { auth: new AuthService(w.repository), me: new MeService(w.db), admin: new AdminService(w.db) }).listen(0, '127.0.0.1');
+  const registry = new ConnectionRegistry();
+  const auth = new AuthService(w.repository, undefined, seen => registry.observe(seen));
+  const server = createApp(config, undefined, { auth, me: new MeService(w.db), admin: new AdminService(w.db), connections: registry }).listen(0, '127.0.0.1');
   await once(server, 'listening');
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const call = async (as: { token: string } | null, method: 'GET' | 'POST', path: string, body?: unknown) => {
@@ -76,7 +79,7 @@ async function serve() {
     });
     return { status: response.status, body: await response.json() as Record<string, any> };
   };
-  return { ...w, call, close: () => server.close() };
+  return { ...w, base, call, close: () => server.close() };
 }
 const by = (role: Role) => people.find(p => p.role === role)!;
 
@@ -163,4 +166,37 @@ test('ownership: /me answers only for the signed-in person whatever the request 
     assert.equal((await s.call(by('USER'), 'GET', `/me/export?profileId=${second.id}`)).body.profile.id, by('USER').id);
     assert.equal((await s.call(by('SUPERDEV'), 'GET', '/me/export')).body.profile.id, by('SUPERDEV').id);
   } finally { s.close(); }
+});
+
+test('live connections: only SUPERDEV sees who is connected; the page is a shell; tokens never leak', async () => {
+  const s = await serve();
+  const safari = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1';
+  try {
+    const page = await fetch(s.base + '/live');
+    assert.equal(page.status, 200);
+    assert.match(page.headers.get('content-security-policy') ?? '', /default-src 'none'/);
+    assert.equal((await page.text()).includes(by('USER').token), false);
+    assert.equal((await s.call(null, 'GET', '/admin/connections')).status, 401);
+    for (const role of ['USER', 'ADMIN', 'DEV', 'SUPERADMIN'] as Role[]) assert.equal((await s.call(by(role), 'GET', '/admin/connections')).status, 403, role);
+    await fetch(s.base + '/me', { headers: { Authorization: `Bearer ${by('USER').token}`, 'User-Agent': safari } });
+    const seen = await s.call(by('SUPERDEV'), 'GET', '/admin/connections');
+    assert.equal(seen.status, 200);
+    const mine = (seen.body.connections as Record<string, unknown>[]).find(c => c.profileId === by('USER').id)!;
+    assert.equal(mine.device, 'iPhone/iPad · Safari');
+    assert.equal(mine.active, true);
+    assert.equal(JSON.stringify(seen.body).includes(by('USER').token), false);
+    assert.deepEqual(Object.keys(mine).sort(), ['active', 'address', 'device', 'displayName', 'id', 'lastSeen', 'profileId', 'requests', 'role', 'since']);
+  } finally { s.close(); }
+});
+
+test('connection registry marks idle clients inactive and forgets old ones', () => {
+  let now = 1_000_000;
+  const registry = new ConnectionRegistry(() => now);
+  registry.observe({ sessionKey: 'aaaaaaaa', profileId: 'p', displayName: 'Ana', role: 'USER' });
+  assert.equal(registry.list()[0].active, true);
+  now += 6 * 60_000;
+  assert.equal(registry.list()[0].active, false);
+  now += 30 * 60_000;
+  assert.equal(registry.list().length, 0);
+  assert.equal(deviceLabel('Mozilla/5.0 (Windows NT 10.0) Chrome/120 Safari/537'), 'Windows · Chrome');
 });

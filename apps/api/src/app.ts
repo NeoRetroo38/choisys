@@ -12,6 +12,8 @@ import type { MeService } from './services/meService.js';
 import { meRoutes } from './meRoutes.js';
 import type { AdminService } from './services/adminService.js';
 import { adminRoutes } from './adminRoutes.js';
+import { requestContext, type ConnectionRegistry } from './connections.js';
+import { connectionRoutes } from './connectionRoutes.js';
 import { RateLimiter as MeLimiter } from './rateLimit.js';
 export interface AppDependencies {
   auth?: AuthService | null;
@@ -25,17 +27,22 @@ export interface AppDependencies {
   me?: MeService;
   /** Operator endpoints (/admin); absent without a database. */
   admin?: AdminService;
+  /** Live list of connected clients (/admin/connections, /live). */
+  connections?: ConnectionRegistry;
 }
 export function createApp(config: ApiConfig, cube: CubeClient = new NeoCubeClient(config.token, config.timeoutMs), dependencies: AppDependencies = {}) {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', false);
+  app.use((req, _res, next) => { requestContext.run({ address: req.socket.remoteAddress ?? '', userAgent: String(req.get('user-agent') ?? '').slice(0, 300) }, next); });
   app.use((req, res, next) => {
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     const origin = req.get('origin');
     if (origin !== undefined) {
-      if (!config.allowedOrigins.includes(origin)) return next(new ApiError(403, 'ORIGIN_NOT_ALLOWED'));
+      let sameOrigin = false;
+      try { sameOrigin = new URL(origin).host === req.get('host'); } catch { /* malformed origin stays rejected */ }
+      if (!sameOrigin && !config.allowedOrigins.includes(origin)) return next(new ApiError(403, 'ORIGIN_NOT_ALLOWED'));
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.vary('Origin');
       if (req.method === 'OPTIONS') {
@@ -55,6 +62,7 @@ export function createApp(config: ApiConfig, cube: CubeClient = new NeoCubeClien
   app.use(authRoutes(dependencies.auth ?? null));
   app.use(productRoutes(new SessionService(cube, undefined, dependencies.runRecorder), dependencies.auth ?? null, dependencies.allowUnauthenticatedProduct === true, dependencies.productLimiter));
   if (dependencies.me) app.use(meRoutes(dependencies.auth ?? null, dependencies.me, dependencies.productLimiter ?? new MeLimiter()));
+  if (dependencies.connections) app.use(connectionRoutes(dependencies.auth ?? null, dependencies.connections, dependencies.productLimiter ?? new MeLimiter()));
   if (dependencies.admin) app.use(adminRoutes(dependencies.auth ?? null, dependencies.admin, dependencies.productLimiter ?? new MeLimiter()));
   app.use((_req, _res, next) => next(new ApiError(404, 'NOT_FOUND')));
   const errors: ErrorRequestHandler = (error: unknown, _req, res, _next) => {

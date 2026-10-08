@@ -7,16 +7,19 @@ import { DevMemoryAuthRepository } from './auth/devMemoryRepository.js';
 import { PrismaRunRecorder } from './services/runRecorder.js';
 import { MeService } from './services/meService.js';
 import { AdminService } from './services/adminService.js';
+import { ConnectionRegistry } from './connections.js';
 
 try {
   const config = readConfig();
   const database = process.env.DATABASE_URL ? createDatabaseClient(requireDatabaseUrl()) : null;
   const devMemory = !database && process.env.CHOISYS_DEV_MEMORY_AUTH === '1';
-  const auth = database ? new AuthService(new PrismaAuthRepository(database))
-    : devMemory ? new AuthService(new DevMemoryAuthRepository()) : null;
+  const connections = new ConnectionRegistry();
+  const seen = (s: Parameters<ConnectionRegistry['observe']>[0]) => connections.observe(s);
+  const auth = database ? new AuthService(new PrismaAuthRepository(database), undefined, seen)
+    : devMemory ? new AuthService(new DevMemoryAuthRepository(), undefined, seen) : null;
   if (devMemory) console.warn('DEV ONLY: accounts are kept in memory and lost on restart.');
   else if (!auth) console.warn('Account service unavailable: configure DATABASE_URL and apply database migrations.');
-  const server = createApp(config, undefined, { auth, runRecorder: database ? new PrismaRunRecorder(database) : undefined, me: database ? new MeService(database) : undefined, admin: database ? new AdminService(database) : undefined }).listen(config.port, config.host, () => {
+  const server = createApp(config, undefined, { auth, runRecorder: database ? new PrismaRunRecorder(database) : undefined, me: database ? new MeService(database) : undefined, admin: database ? new AdminService(database) : undefined, connections }).listen(config.port, config.host, () => {
     console.log(`choisys-api listening on http://${config.host}:${config.port}`);
   });
   server.requestTimeout = 10_000;
