@@ -20,6 +20,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 
 function Test-PrivateIPv4([string]$ip) {
+    if ($ip -eq '127.0.0.1') { return $true }
     $o = $ip.Split('.') | ForEach-Object { [int]$_ }
     return $o[0] -eq 10 -or ($o[0] -eq 172 -and $o[1] -ge 16 -and $o[1] -le 31) -or ($o[0] -eq 192 -and $o[1] -eq 168) -or
         ($o[0] -eq 100 -and $o[1] -ge 64 -and $o[1] -le 127)
@@ -33,14 +34,11 @@ function Get-TailscaleExe {
     throw 'No encuentro tailscale.exe. Instala Tailscale e inicia sesión.'
 }
 
-$names = @()
 if ($Tailscale -and -not $Address) {
     $ts = Get-TailscaleExe
     $Address = (& $ts ip -4 2>$null | Select-Object -First 1)
     if (-not $Address) { throw 'Tailscale no tiene IP: abre Tailscale en el PC e inicia sesión.' }
     $Address = $Address.Trim()
-    # Nombre MagicDNS (p. ej. desktop-dgjsrgv.tailXXXX.ts.net): también se acepta como origen en Safari.
-    try { $self = (& $ts status --json | ConvertFrom-Json).Self; if ($self.DNSName) { $names += $self.DNSName.TrimEnd('.') } } catch { }
 }
 
 if (-not $Address) {
@@ -52,14 +50,22 @@ if (-not $Address) {
 }
 if (-not (Test-PrivateIPv4 $Address)) { throw "La dirección $Address no es privada; no se usa." }
 
-$webOrigin = "http://${Address}:$WebPort"
-$apiUrl = "http://${Address}:$ApiPort"
-$origins = @($webOrigin) + ($names | ForEach-Object { "http://${_}:$WebPort" })
+# Shared validation keeps public HTTPS URLs independent of the private local bind.
+# Discovery still runs with an explicit -Address, and includes the MagicDNS short name.
+$configArgs = @((Join-Path $PSScriptRoot 'runtime-config.mjs'), '--host', $Address, '--api-port', "$ApiPort", '--web-port', "$WebPort")
+if ($Tailscale) { $configArgs += '--tailscale' }
+$configJson = & node @configArgs
+if ($LASTEXITCODE -ne 0) { throw 'Invalid runtime configuration; check exact HTTP(S) origins and ports.' }
+$config = $configJson | ConvertFrom-Json
+$webOrigin = $config.webOrigin
+$apiUrl = $config.apiUrl
+$origins = @($config.allowedOrigins)
 Write-Host "IPv4 del PC:  $Address$(if ($Tailscale) { '  (Tailscale)' })"
-Write-Host "API:          $apiUrl  (solo esa interfaz)"
+Write-Host "API local:    http://${Address}:$ApiPort  (solo esa interfaz)"
+Write-Host "API cliente:  $apiUrl"
 Write-Host "Safari:       $webOrigin"
-foreach ($n in $names) { Write-Host "              http://${n}:$WebPort" }
-if (-not $env:DATABASE_URL) { Write-Host 'Cuentas:      almacén local privado y persistente de desarrollo.' }
+if (-not $env:CHOISYS_WEB_ORIGIN) { foreach ($n in $config.dnsNames) { Write-Host "              http://${n}:$WebPort" } }
+Write-Host 'Cuentas:      npm run check:neon confirma la base del entorno o archivo externo.'
 if ($DryRun) { Write-Host 'DryRun: no se arranca nada.'; return }
 
 if (-not $SkipEngine) {
@@ -80,4 +86,4 @@ Start-Process powershell -WorkingDirectory $root -WindowStyle Normal -ArgumentLi
 
 if ($Tailscale) { Write-Host "Listo. En el iPhone o el Mac (con Tailscale activo, desde cualquier sitio), abre en Safari: $webOrigin" }
 else { Write-Host "Listo. En el iPhone (misma red Wi-Fi), abre en Safari: $webOrigin" }
-Write-Host 'Para parar: cierra las tres ventanas. El tráfico es HTTP sin cifrar: usa solo una red de confianza.'
+Write-Host 'Para parar: cierra las tres ventanas. Los orígenes HTTPS necesitan un proxy privado ya configurado.'

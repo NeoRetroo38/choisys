@@ -36,14 +36,18 @@ La persistencia PostgreSQL/Prisma está definida en `apps/api/prisma`. El schema
 siete tablas: `accounts`, `account_sessions`, `profiles`, `cube_data`, `permissions`,
 `role_permissions` y `role_changes`; almacena resultados ya producidos por C++ y no
 calcula inferencias. Existe una migración inicial revisada
-(`apps/api/prisma/migrations/20261006000000_initial`) que **no se ha aplicado a ninguna
-base de datos**: todavía no hay una instancia PostgreSQL identificada.
+(`apps/api/prisma/migrations/20261006000000_initial`). Cada servidor debe comprobar su
+propia instancia con `npm run check:neon`: tener `DATABASE_URL` no prueba la conexión,
+la migración ni el seed.
 
 La API ya tiene autenticación de producto (`/auth/register`, `/auth/login`, `/auth/me` y
 `/auth/logout`). Sin `DATABASE_URL` el servicio de cuentas no está disponible; solo para
 desarrollo, `CHOISYS_DEV_MEMORY_AUTH=1` usa cuentas en memoria y `CHOISYS_DEV_AUTH_FILE`
 activa un almacén local privado y persistente (el launcher Tailscale lo configura fuera del repo).
-Los endpoints públicos de perfil, historial y administración no existen todavía.
+Con PostgreSQL, `/me` devuelve perfil y capabilities; `/me/runs`, `/me/export`,
+`/me/profile` y `/me/delete` operan solo sobre el usuario autenticado. Los endpoints
+`/admin/*` comprueban las capacidades de SUPERDEV en la API. `/live` es una página de
+acceso; sus datos de conexiones requieren `system.manage`.
 
 Con la migración aplicada, `npm run db:seed --workspace apps/api` carga el catálogo de
 permisos y las asignaciones por rol (se puede repetir sin efectos). Después, para asignar el
@@ -138,6 +142,10 @@ npm --workspace apps/mobile run start -- --lan
 Atajo para ver la web desde Safari en el iPhone (misma red privada, HTTP sin cifrar):
 `.\scripts\dev-lan.ps1` arranca C++, API y Expo web y muestra la URL; `-DryRun` solo la muestra.
 Fuera de casa (iPhone o Mac con Tailscale): `-Tailscale`; guía en `docs/DEMO-TAILSCALE.md`.
+Para un proxy HTTPS privado ya configurado, ambos launchers respetan
+`EXPO_PUBLIC_API_URL` y `CHOISYS_WEB_ORIGIN`; configuración en
+[`docs/PRIVATE-RUNTIME.md`](docs/PRIVATE-RUNTIME.md). Las URLs del navegador no cambian
+la dirección local de escucha de la API ni la del motor.
 
 Abrir el QR en Expo Go compatible con SDK 57. Reiniciar Metro al cambiar la URL.
 La red y el firewall existentes deben permitir API y Metro desde el iPhone; los
@@ -157,11 +165,19 @@ nunca `*`. Esta tarea no habilita Expo web ni instala sus dependencias.
 - `API_ALLOWED_ORIGINS`: orígenes web autorizados explícitamente.
 - `NEO_CUBE_TIMEOUT_MS`: timeout del bridge, por defecto 2000 ms.
 - `EXPO_PUBLIC_API_URL`: URL de la API de producto para el móvil.
+- `CHOISYS_WEB_ORIGIN`: origen web exacto que muestra el launcher y autoriza la API;
+  opcional para conservar los valores HTTP de desarrollo.
 - `CHOISYS_LOCAL_LOG_DIR`: directorio local opcional de logs C++.
 - `DATABASE_URL`: conexión PostgreSQL usada únicamente por `apps/api` y Prisma;
   debe provisionarse fuera de Git.
 - `CHOISYS_DEV_AUTH_FILE`: archivo local externo al repositorio para conservar cuentas y
   sesiones en la demo privada sin PostgreSQL; contiene solo hashes, nunca contraseñas ni tokens.
+
+`npm run check:neon` lee `DATABASE_URL` del entorno o del archivo externo indicado
+por `CHOISYS_ENV_FILE`. Comprueba Prisma, tablas, migraciones y seed dentro de una
+transacción PostgreSQL `READ ONLY`, sin registrar usuarios ni renovar sesiones.
+Solo imprime indicadores y códigos de error seguros. Las pruebas `neon.test.ts`
+son distintas: con `DATABASE_URL` definida escriben cuentas de prueba y auditoría.
 
 Logs C++ por defecto:
 `C:\Users\Admin\Documents\Scenarys\logs\neo-cube\service.log`. Solo timestamp,

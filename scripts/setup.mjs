@@ -78,4 +78,4 @@ if (flag('--migrate')) {
 }
 
 console.log('\nListo. Para arrancar todo (motor, API y web):\n  node scripts/dev.mjs');
-console.log(loadDatabaseUrl() ? '  (hay DATABASE_URL: aplica la migración una vez con: node scripts/setup.mjs --migrate)' : '  (sin DATABASE_URL: las cuentas serán en memoria, solo para desarrollo)');
+console.log(loadDatabaseUrl() ? '  (hay DATABASE_URL: comprueba su estado sin escribir con: npm run check:neon)' : '  (sin DATABASE_URL: la demo conserva cuentas en un archivo privado, solo para desarrollo)');

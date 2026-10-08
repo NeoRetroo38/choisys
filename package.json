@@ -14,6 +14,8 @@
     "db:generate": "npm run db:generate --workspace apps/api",
     "build": "npm run build --workspace apps/api && npm run build --workspace packages/core",
     "check:public": "node scripts/check-public-boundary.mjs",
+    "check:neon": "node --import tsx scripts/check-neon.mts",
+    "test:runtime": "node --test scripts/portable.test.mjs scripts/runtime.test.mjs",
     "check": "npm run check:public && npm run check --workspace apps/api && npm run check --workspace packages/core && npm run check --workspace apps/mobile",
     "test": "npm run test --workspace apps/api && npm run test --workspace apps/mobile",
     "test:local": "node --import tsx scripts/test-local-flow.mts"
