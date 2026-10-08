@@ -1,6 +1,6 @@
 import type {
   AdminProfileResponse, AdminProfileRow, AdminProfilesResponse, DeleteMeResponse, ExportResponse, Measurement, MeProfile, MeResponse, Role,
-  RoleChangeRow, RoleChangesResponse, RunHistoryResponse, RunSummary,
+  RoleChangeRow, RoleChangesResponse, RunHistoryResponse, RunSummary, RequestedRole, RoleRequestStatus, RoleRequestSummary, AdminRoleRequestRow,
 } from '@scenarys/shared';
 import { ApiRequestError, apiRequest, type ApiTransport } from '../api/request';
 
@@ -42,14 +42,14 @@ function readRuns(value: unknown): RunSummary[] {
 }
 
 /**
- * Role requests (issue "Registro con solicitud de rol"). Local types until the contract lands in @scenarys/shared:
- * the person always starts as USER and a sudev decides. An older server simply omits `roleRequest`.
+ * Public DTOs come from shared; these aliases keep presentation names local to this surface.
+ * The person always starts as USER. An older server simply omits `roleRequest`.
  */
-export type RequestableRole = Exclude<Role, 'USER'>;
-export type RoleRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
-export interface OwnRoleRequest { id: string; requestedRole: RequestableRole; status: RoleRequestStatus; createdAt: string; decidedAt: string | null }
-export interface RoleRequestRow { id: string; profile: { id: string; displayName: string; role: Role }; requestedRole: RequestableRole; status: RoleRequestStatus; createdAt: string }
-export type MeWithRequest = MeResponse & { roleRequest: OwnRoleRequest | null };
+export type RequestableRole = RequestedRole;
+export type { RoleRequestStatus } from '@scenarys/shared';
+export type OwnRoleRequest = RoleRequestSummary;
+export type RoleRequestRow = AdminRoleRequestRow;
+export type MeWithRequest = MeResponse;
 
 const statuses: readonly RoleRequestStatus[] = ['PENDING', 'APPROVED', 'REJECTED'];
 const isRequestable = (value: unknown): value is RequestableRole => isRole(value) && value !== 'USER';
