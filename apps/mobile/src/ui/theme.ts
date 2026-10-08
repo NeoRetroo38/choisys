@@ -17,3 +17,9 @@ export const space = { xs: 6, s: 12, m: 20, l: 32, xl: 56 } as const;
 export const maxWidth = 560;
 /** Minimum comfortable touch target. */
 export const tap = 48;
+
+/**
+ * Native text-field chrome. Android otherwise draws its own underline under our hairline and paints the cursor
+ * and selection handles in the system accent colour; this keeps them ink, like the rest of the interface.
+ */
+export const inputChrome = { underlineColorAndroid: 'transparent', cursorColor: color.ink, selectionColor: 'rgba(0, 0, 0, 0.18)' } as const;

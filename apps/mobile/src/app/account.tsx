@@ -14,7 +14,7 @@ import EmptyState from '../ui/EmptyState';
 import ProfileHeader from '../ui/ProfileHeader';
 import Screen from '../ui/Screen';
 import Section from '../ui/Section';
-import { color, font, space } from '../ui/theme';
+import { color, font, space, inputChrome } from '../ui/theme';
 
 /** Everything about "me" on one screen: who I am, my cube, my data, my session. */
 export default function Account() {
@@ -99,7 +99,7 @@ export default function Account() {
               onPress={() => setPassword('')} />
           : <View style={styles.confirmDelete}>
               <Text style={styles.deleteText}>Escribe tu contraseña para borrar la cuenta.</Text>
-              <TextInput value={password} onChangeText={setPassword} secureTextEntry autoFocus autoComplete="current-password"
+              <TextInput {...inputChrome} value={password} onChangeText={setPassword} secureTextEntry autoFocus autoComplete="current-password"
                 accessibilityLabel="Contraseña" onSubmitEditing={() => void deleteAccount()} style={styles.password} />
               <ActionRow label="Borrar definitivamente" tone="danger" busy={busy === 'delete'} onPress={() => void deleteAccount()} />
               <ActionRow label="Cancelar" onPress={() => setPassword(null)} />

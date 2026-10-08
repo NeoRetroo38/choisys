@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import RoleChoice, { type RoleOption } from '../ui/RoleChoice';
+import { inputChrome } from '../ui/theme';
 
 interface AuthScreenProps {
   mode: 'login' | 'register';
@@ -66,7 +67,7 @@ export default function AuthScreen({ mode, busy, error, onSubmit, onModeChange, 
 
           {register && <View style={styles.field}>
             <Text style={styles.label}>Nombre</Text>
-            <TextInput accessibilityLabel="Nombre" value={displayName} onChangeText={setDisplayName}
+            <TextInput {...inputChrome} accessibilityLabel="Nombre" value={displayName} onChangeText={setDisplayName}
               editable={!busy} style={styles.input} placeholder="Tu nombre" placeholderTextColor="#777777"
               autoCapitalize="words" autoComplete={Platform.OS === 'ios' ? undefined : 'name'}
               textContentType={Platform.OS === 'ios' ? 'name' : undefined}
@@ -76,7 +77,7 @@ export default function AuthScreen({ mode, busy, error, onSubmit, onModeChange, 
 
           <View style={styles.field}>
             <Text style={styles.label}>Correo electrónico</Text>
-            <TextInput ref={emailInput} accessibilityLabel="Correo electrónico" value={email}
+            <TextInput {...inputChrome} ref={emailInput} accessibilityLabel="Correo electrónico" value={email}
               onChangeText={setEmail} editable={!busy} style={styles.input}
               placeholder="tu@correo.com" placeholderTextColor="#777777" keyboardType="email-address"
               autoCapitalize="none" autoCorrect={false}
@@ -88,7 +89,7 @@ export default function AuthScreen({ mode, busy, error, onSubmit, onModeChange, 
 
           <View style={styles.field}>
             <Text style={styles.label}>Contraseña</Text>
-            <TextInput key={mode} ref={passwordInput} accessibilityLabel="Contraseña"
+            <TextInput {...inputChrome} key={mode} ref={passwordInput} accessibilityLabel="Contraseña"
               value={password} onChangeText={setPassword} editable={!busy} style={styles.input}
               placeholder={register ? 'Crea tu contraseña' : 'Tu contraseña'} placeholderTextColor="#777777"
               autoCapitalize="none" autoCorrect={false} secureTextEntry
