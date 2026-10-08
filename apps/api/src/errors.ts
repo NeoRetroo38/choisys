@@ -9,6 +9,7 @@ const messages: Record<ApiErrorCode, string> = {
   AUTH_RATE_LIMITED: 'Too many attempts. Try again later.',
   SESSION_LIMIT_REACHED: 'Session capacity reached. Try again later.', SESSION_BUSY: 'Session request in progress. Try again.',
   SESSION_CONFLICT: 'Phase or selection conflicts with this session.',
+  FORBIDDEN: 'You do not have permission for this.',
   NEO_CUBE_UNAVAILABLE: 'Local evaluation service unavailable.', NEO_CUBE_TIMEOUT: 'Local evaluation timed out. Retry the same selection.',
   NEO_CUBE_INVALID_RESPONSE: 'Invalid local evaluation response.', NEO_CUBE_AUTH_FAILED: 'Local evaluation authentication failed.',
 };
