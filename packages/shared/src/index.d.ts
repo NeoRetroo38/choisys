@@ -5,7 +5,7 @@ export type Position = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 export interface Decision { position: Position; selected: boolean; value: 0 | 1 }
 /** Authentication transport contains only public profile fields. */
 export interface PublicProfile { id: string; displayName: string }
-export interface RegisterRequest { email: string; password: string; displayName: string }
+export interface RegisterRequest { email: string; password: string; displayName: string; requestedRole?: RequestedRole }
 export interface LoginRequest { email: string; password: string }
 export interface AuthResponse { ok: true; token: string; expiresAt: string; profile: PublicProfile }
 export interface AuthMeResponse { ok: true; expiresAt: string; profile: PublicProfile }
@@ -45,7 +45,7 @@ export type ApiErrorCode =
   | 'ORIGIN_NOT_ALLOWED' | 'NOT_FOUND' | 'INTERNAL_ERROR'
   | 'AUTH_REQUIRED' | 'AUTH_UNAVAILABLE' | 'INVALID_CREDENTIALS' | 'ACCOUNT_EXISTS' | 'AUTH_RATE_LIMITED'
   | 'SESSION_NOT_FOUND' | 'SESSION_LIMIT_REACHED' | 'SESSION_BUSY'
-  | 'SESSION_CONFLICT' | 'FORBIDDEN'
+  | 'SESSION_CONFLICT' | 'FORBIDDEN' | 'ALREADY_DECIDED' | 'ROLE_REQUESTS_UNAVAILABLE'
   | 'NEO_CUBE_UNAVAILABLE' | 'NEO_CUBE_TIMEOUT'
   | 'NEO_CUBE_INVALID_RESPONSE' | 'NEO_CUBE_AUTH_FAILED';
 export interface ApiErrorResponse {
@@ -55,10 +55,22 @@ export interface ApiErrorResponse {
 
 /** Roles, lowest to highest. ADMIN, DEV and SUPERADMIN are reserved and hold what USER holds for now. */
 export type Role = 'USER' | 'ADMIN' | 'DEV' | 'SUPERADMIN' | 'SUPERDEV';
+/** A request never grants a role. SUPERDEV approval remains forbidden by the role hierarchy. */
+export type RequestedRole = Exclude<Role, 'USER'>;
+export type RoleRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export interface RoleRequestSummary {
+  id: string; requestedRole: RequestedRole; status: RoleRequestStatus; createdAt: string; decidedAt: string | null;
+}
+export interface AdminRoleRequestRow extends Omit<RoleRequestSummary, 'decidedAt'> {
+  profile: { id: string; displayName: string; role: Role };
+}
+export interface RoleRequestsResponse { ok: true; requests: AdminRoleRequestRow[] }
+export interface RoleRequestDecision { approve: boolean; reason?: string }
+export interface RoleRequestDecisionResponse { ok: true; roleRequest: RoleRequestSummary }
 /** Own account, as the person sees it (GET /me). */
 export interface MeProfile { id: string; displayName: string; role: Role; createdAt: string }
 /** What the signed-in person may do, by public capability name. The UI shows or hides; the API always decides. */
-export interface MeResponse { ok: true; profile: MeProfile; capabilities: string[] }
+export interface MeResponse { ok: true; profile: MeProfile; capabilities: string[]; roleRequest: RoleRequestSummary | null }
 export interface UpdateMeRequest { displayName: string }
 /** One finished (or abandoned) run in the person's own history. Only values returned by the engine are stored. */
 export interface RunSummary {

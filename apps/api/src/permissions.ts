@@ -17,6 +17,7 @@ export const permissions = {
   'account.disable': 'Disable or re-enable any account',
   'role.assign': 'Assign roles below its own',
   'role_changes.read': 'Read the role change audit log',
+  'role_requests.read': 'Read role requests',
   'cube_data.read.any': 'Read any profile\'s runs and sessions',
   'cube_data.read.technical': 'Read technical result data and engine versions',
   'system.manage': 'Manage system configuration',
@@ -30,7 +31,7 @@ const userGrants: readonly PermissionKey[] = [
 ];
 
 const superdevExtras: readonly PermissionKey[] = [
-  'profile.read.any', 'account.disable', 'role.assign', 'role_changes.read',
+  'profile.read.any', 'account.disable', 'role.assign', 'role_changes.read', 'role_requests.read',
   'cube_data.read.any', 'cube_data.read.technical', 'system.manage',
 ];
 
