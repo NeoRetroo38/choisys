@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AccountProvider } from '../account/AccountProvider';
 import { AuthProvider, useAuth } from '../auth/AuthProvider';
 import WelcomeScreen from '../screens/WelcomeScreen';
 
@@ -19,7 +20,9 @@ function AuthenticatedRoutes() {
     </View>;
   }
   return <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#ffffff' }, animation: 'fade' }}>
-    <Stack.Protected guard={state.status === 'signedIn'}><Stack.Screen name="index" /></Stack.Protected>
+    <Stack.Protected guard={state.status === 'signedIn'}>
+      <Stack.Screen name="index" /><Stack.Screen name="account" /><Stack.Screen name="system" />
+    </Stack.Protected>
     <Stack.Protected guard={state.status === 'signedOut'}>
       <Stack.Screen name="sign-in" /><Stack.Screen name="register" />
     </Stack.Protected>
@@ -29,7 +32,7 @@ function AuthenticatedRoutes() {
 export default function RootLayout() {
   const [welcomed, setWelcomed] = useState(false);
   if (!welcomed) return <><StatusBar style="light" /><WelcomeScreen onContinue={() => setWelcomed(true)} /></>;
-  return <AuthProvider><StatusBar style="dark" /><AuthenticatedRoutes /></AuthProvider>;
+  return <AuthProvider><AccountProvider><StatusBar style="dark" /><AuthenticatedRoutes /></AccountProvider></AuthProvider>;
 }
 const styles = StyleSheet.create({
   loading: { flex: 1, backgroundColor: '#ffffff', justifyContent: 'center', alignItems: 'center', gap: 28, padding: 32 },

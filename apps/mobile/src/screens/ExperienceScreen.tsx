@@ -14,13 +14,15 @@ import PopCircle from './PopCircle';
 interface ExperienceScreenProps {
   client: ReturnType<typeof createProductClient>;
   onSignOut: () => void;
+  /** Present when the API exposes the person's account; replaces the bare sign-out link. */
+  onAccount?: () => void;
   onUnauthorized: () => void;
 }
 
 const positions: Position[][] = [[1, 2, 3], [4, 5, 6], [7, 8, 9]];
 const phaseTitles = { 1: '1. fase one.', 2: '2. fase two.', 3: '3. fase three.' };
 
-export default function ExperienceScreen({ client, onSignOut, onUnauthorized }: ExperienceScreenProps) {
+export default function ExperienceScreen({ client, onSignOut, onAccount, onUnauthorized }: ExperienceScreenProps) {
   const [state, dispatch] = useReducer(sessionReducer, initialState);
   const inFlight = useRef(false);
   const [history, setHistory] = useState<RunMeasurements[]>([]);
@@ -191,9 +193,10 @@ export default function ExperienceScreen({ client, onSignOut, onUnauthorized }: 
           </Pressable>
         </FadeIn>}
 
-        {state.screen !== 'phase' && <Pressable accessibilityRole="button" onPress={onSignOut}
+        {state.screen !== 'phase' && <Pressable accessibilityRole="button" onPress={onAccount ?? onSignOut}
+          accessibilityLabel={onAccount ? 'Tu cuenta' : 'Cerrar sesión'}
           disabled={state.busy} style={({ pressed }) => [styles.signOut, state.busy && styles.disabled, pressed && styles.pressed]}>
-          <Text style={styles.secondaryText}>Cerrar sesión</Text>
+          <Text style={styles.secondaryText}>{onAccount ? 'tú' : 'Cerrar sesión'}</Text>
         </Pressable>}
       </ScrollView>
     </View>

@@ -32,7 +32,7 @@
     "web": "expo start --web",
     "check": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test tests/productFlow.test.ts tests/authSession.test.ts tests/runHistory.test.ts",
+    "test": "node --import tsx --test tests/productFlow.test.ts tests/authSession.test.ts tests/runHistory.test.ts tests/account.test.ts",
     "lint": "expo lint"
   },
   "private": true
