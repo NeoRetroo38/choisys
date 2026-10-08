@@ -1,0 +1,33 @@
+{
+  "title": "Backend de choisys · avances",
+  "date": "8 de octubre de 2026",
+  "slides": [
+    { "kind": "cover", "title": "Backend de choisys", "subtitle": "Avances de la API, la base de datos y el motor C++ · 4–8 oct 2026" },
+    { "title": "Cómo encaja todo", "lead": "Cada capa hace una sola cosa. La interfaz nunca decide seguridad.",
+      "flow": ["Interfaz móvil", "API choisys", "Autorización central", "Neon (PostgreSQL)"], "note": "Las decisiones del Cubo pasan por el motor C++ (neos-cube), solo desde la API y solo en la propia máquina.",
+      "bullets": [] },
+    { "title": "Cuentas y sesiones", "lead": "Hecho y en producción de desarrollo.",
+      "bullets": ["Registro atómico: cuenta + perfil + sesión se crean juntos o no se crea nada", "Contraseñas con hash; sesiones de 30 días, revocables", "Límites de intentos por IP y por correo", "Cuenta desactivada = sin acceso en la siguiente petición"] },
+    { "title": "Roles y capacidades", "lead": "Un único catálogo decide qué puede hacer cada rol (PR #54, en revisión).",
+      "table": [["Rol interno", "Se muestra como", "Capacidades"], ["USER", "usuario", "lo propio"], ["ADMIN · DEV · SUPERADMIN", "reservados", "= USER"], ["SUPERDEV", "sudev", "USER + operar el sistema"]],
+      "note": "SUDEV es solo el nombre de producto: internamente sigue siendo SUPERDEV." },
+    { "title": "Mi cuenta (RGPD)", "lead": "Cada persona ve y controla solo lo suyo.",
+      "bullets": ["GET /me → perfil + capacidades", "GET /me/runs y /me/export → mi historial y mis datos", "POST /me/profile → cambiar mi nombre", "POST /me/delete → borrar cuenta (pide contraseña; requisito de Apple)"] },
+    { "title": "Operación sudev", "lead": "Solo el rol más alto, y siempre por debajo de sí mismo (PR #54).",
+      "bullets": ["Listar perfiles con número de recorridos", "Asignar rol, con motivo y auditoría en la misma transacción", "Desactivar o reactivar cuentas", "Nadie se cambia a sí mismo, toca a un igual ni sube a otro a su nivel"] },
+    { "title": "El historial se guarda", "lead": "Al terminar las 3 fases, la API guarda el recorrido.",
+      "bullets": ["Solo lo que devuelve el motor: 3 mediciones (fase, fila, columna)", "Si guardar falla, la respuesta a la persona no se rompe", "Reintentos no duplican", "TypeScript no calcula nada del Cubo"] },
+    { "title": "Base de datos Neon", "lead": "Verificada contra la base real.",
+      "stats": [["1", "migración aplicada"], ["13", "capacidades sembradas"], ["2", "tests contra Neon real"]],
+      "bullets": ["Auditoría de roles solo-anexar (no se puede borrar ni editar)", "Sin memoria: si Neon falla, se ve el fallo"] },
+    { "title": "Motor C++ · neos-cube", "lead": "Público, determinista y portable (Windows, macOS, Linux).",
+      "bullets": ["Servicio local autenticado en 127.0.0.1:8765", "Tests del núcleo y prueba de humo extremo a extremo", "Ejemplo simulate_runs: 600 recorridos sintéticos con la librería real", "Sin inferencia: espera una especificación matemática aprobada"] },
+    { "title": "Calidad", "lead": "Cifras de hoy.",
+      "stats": [["48", "tests de la API"], ["26", "tests de la app"], ["5", "roles probados"]],
+      "bullets": ["Una regresión se detectó y corrigió antes de integrarse (PR #22)", "Comprobación de frontera pública en cada cambio", "Todo cambio entra por PR y lo fusiona solo el dueño"] },
+    { "title": "Pendiente y riesgos", "lead": "Lo que falta, dicho claro.",
+      "bullets": ["Primera ejecución real en el Mac (preparada, sin probar)", "Rotar la contraseña de pruebas de Neon", "Interfaz de usuario y de sudev sobre el contrato de /me", "Interpretación de resultados: no existe, por decisión"] },
+    { "title": "Mapa de repositorios", "lead": "Todo en github.com/NeoRetroo38.",
+      "table": [["Repositorio", "Qué es"], ["choisys", "Producto: app, API, base de datos (TypeScript)"], ["neos-cube", "Motor del Cubo (C++)"], ["neo-cube-web", "Utilidades públicas de dibujo (TypeScript)"], ["scenarys", "Web corporativa (privado)"]] }
+  ]
+}
