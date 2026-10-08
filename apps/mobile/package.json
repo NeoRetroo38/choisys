@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "index.ts",
   "dependencies": {
+    "@neoretroo38/neo-cube-web": "github:NeoRetroo38/neo-cube-web#v0.1.0",
     "@scenarys/shared": "0.1.0",
     "expo": "~57.0.26",
     "expo-audio": "~57.0.5",

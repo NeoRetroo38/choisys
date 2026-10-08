@@ -1,3 +1,5 @@
+import { createCubeEdges } from '@neoretroo38/neo-cube-web';
+import type { Vec3 } from '@neoretroo38/neo-cube-web';
 import { useEffect, useState } from 'react';
 import { PanResponder, Platform, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, G, Line, Polyline, Text as SvgText } from 'react-native-svg';
@@ -14,7 +16,7 @@ const defaultView = { yaw: Math.PI / 6, pitch: Math.PI / 9 };
 const maxPitch = Math.PI * 0.45;
 const dragSpeed = 0.011;
 
-type Vec = [number, number, number];
+type Vec = Vec3;
 
 // Rendering only: lattice indices come from the engine untouched; this just orients the view.
 function makeProjector(yaw: number, pitch: number, scale: number, center: number) {
@@ -46,10 +48,7 @@ const inertiaStop = 0.0004;
 // - the outer cube: a plain box at +/-2 that frames the whole view;
 // - the decision grid: a 2 x 2 x 2 lattice whose 27 vertices (-gridStep, 0, gridStep) are exactly the possible
 //   decisions (row, column, phase). A narrow gap separates it from the outer cube.
-const outerEdges: Array<[Vec, Vec]> = [];
-for (const a of [-2, 2]) for (const b of [-2, 2]) {
-  outerEdges.push([[-2, a, b], [2, a, b]], [[a, -2, b], [a, 2, b]], [[a, b, -2], [a, b, 2]]);
-}
+const outerEdges = createCubeEdges(4);
 // Distance between neighbouring decisions. The grid spans +/-gridStep; the outer cube is at +/-2.
 const gridStep = 1.5;
 const gridLevels = [-gridStep, 0, gridStep];
