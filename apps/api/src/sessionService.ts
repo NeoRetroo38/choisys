@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { EvaluateRequest, EvaluateResponse, Phase, PhaseTransitionTiming, StartSessionRequest, StartSessionResponse } from '@scenarys/shared';
 import { ApiError } from './errors.js';
 import type { CubeClient } from './neoCubeClient.js';
+import type { RunRecorder } from './services/runRecorder.js';
 const SESSION_TTL_MS = 30 * 60 * 1000;
 const MAX_SESSIONS = 256;
 interface Session {
@@ -16,7 +17,7 @@ interface Session {
 /** Product sessions are temporary engine state, scoped to an authenticated profile. */
 export class SessionService {
   private readonly sessions = new Map<string, Session>();
-  constructor(private readonly cube: CubeClient, private readonly now: () => number = () => performance.now()) {}
+  constructor(private readonly cube: CubeClient, private readonly now: () => number = () => performance.now(), private readonly recorder?: RunRecorder) {}
   start(input: StartSessionRequest, profileId?: string): StartSessionResponse {
     for (const [id, session] of this.sessions) { if (!session.busy && session.expiresAt <= this.now()) this.sessions.delete(id); }
     if (this.sessions.size >= MAX_SESSIONS) throw new ApiError(503, 'SESSION_LIMIT_REACHED');
@@ -44,7 +45,11 @@ export class SessionService {
         if (response.result.nextPhase) {
           session.expectedPhase = response.result.nextPhase;
           session.phaseReadyAt = this.now();
-        } else session.completed = true;
+        } else {
+          session.completed = true;
+          // Saving the history must never fail the person's answer; the engine already accepted it.
+          if (profileId && response.result.measurements) await this.recorder?.recordCompleted(profileId, response.result.measurements).catch(() => undefined);
+        }
       }
       // A retry of phase N sees exactly the transitions that existed when phase N was first accepted.
       return { ok: true, result: { ...response.result, phaseTransitions: session.phaseTransitions.filter(timing => timing.toPhase <= input.phase) } };
