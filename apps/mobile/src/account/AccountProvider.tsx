@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from 'react';
+import { Fragment, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from 'react';
 import type { MeProfile } from '@scenarys/shared';
 import { useAuth } from '../auth/AuthProvider';
 import { ApiRequestError } from '../api/request';
@@ -34,10 +34,13 @@ export function AccountProvider({ children }: PropsWithChildren) {
   const [scope] = useState(() => new AccountSessionScope());
   const [refreshGate] = useState(() => new AccountRefreshGate());
   const mounted = useRef(true);
-  const ticket = useMemo(() => scope.capture(controller.getState()), [scope, controller, auth.status, auth.token, auth.profile?.id]);
+  // Capture on every render: primitive auth fields may be unchanged after batched intermediate events.
+  // The scope returns the same object within an epoch, keeping the API/effects stable on data renders.
+  const ticket = scope.capture(controller.getState());
   const isCurrent = useCallback(() => mounted.current && scope.isCurrent(ticket, controller.getState()), [scope, ticket, controller]);
   // Bind every endpoint to this token. A delayed action must never use the next person's token.
-  const api = useMemo(() => createAccountApi(process.env.EXPO_PUBLIC_API_URL, () => ticket.token, fetch, isCurrent), [ticket, isCurrent]);
+  const api = useMemo(() => createAccountApi(process.env.EXPO_PUBLIC_API_URL, () => ticket.token, fetch, isCurrent,
+    () => { void controller.bootstrap(); }), [ticket, isCurrent, controller]);
   const [bound, setBound] = useState<{ id: number; state: AccountState }>({ id: -1, state: emptyState });
   const refreshId = useRef(0);
 
@@ -73,7 +76,6 @@ export function AccountProvider({ children }: PropsWithChildren) {
         setProfile(me.profile, me.capabilities, me.roleRequest);
       } catch (error) {
         if (!isCurrent() || operation !== refreshId.current) return;
-        if (error instanceof ApiRequestError && error.code === 'AUTH_REQUIRED') { void controller.bootstrap(); return; }
         const status = error instanceof ApiRequestError && error.code === 'NOT_FOUND' ? 'unavailable' : 'error';
         setBound({ id: ticket.id, state: { ...emptyState, status } });
       }
@@ -84,7 +86,10 @@ export function AccountProvider({ children }: PropsWithChildren) {
 
   // Mask old data during the very first render of a changed session, before effects run.
   const state = isCurrent() && bound.id === ticket.id ? bound.state : emptyState;
-  return <context.Provider value={{ ...state, api, refresh, setProfile }}>{children}</context.Provider>;
+  // Reset every consumer's runs, password drafts and admin rows even if React batches the loading state.
+  return <context.Provider value={{ ...state, api, refresh, setProfile }}>
+    <Fragment key={ticket.id}>{children}</Fragment>
+  </context.Provider>;
 }
 
 export function useAccount() {

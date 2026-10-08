@@ -85,12 +85,19 @@ function readAdminProfile(item: unknown): AdminProfileRow {
 export const adminPaths = { profiles: '/admin/profiles', roleChanges: '/admin/role-changes', roleRequests: '/admin/role-requests' } as const;
 
 export function createAccountApi(baseUrl: string | undefined, getToken: () => string | null, transport: ApiTransport = fetch,
-  isCurrent: () => boolean = () => true) {
+  isCurrent: () => boolean = () => true, onUnauthorized: () => void = () => undefined) {
   const call = async (path: string, body?: unknown, maxBytes?: number, timeoutMs?: number) => {
     if (!isCurrent()) throw new ApiRequestError('STALE_SESSION');
-    const data = await apiRequest(baseUrl, path, { body, token: getToken(), maxBytes, timeoutMs }, transport);
-    if (!isCurrent()) throw new ApiRequestError('STALE_SESSION');
-    return data;
+    try {
+      const data = await apiRequest(baseUrl, path, { body, token: getToken(), maxBytes, timeoutMs }, transport);
+      if (!isCurrent()) throw new ApiRequestError('STALE_SESSION');
+      return data;
+    } catch (error) {
+      // An old client's 401 must never clear or revalidate the next person's valid session.
+      if (!isCurrent()) throw new ApiRequestError('STALE_SESSION');
+      if (error instanceof ApiRequestError && error.code === 'AUTH_REQUIRED') onUnauthorized();
+      throw error;
+    }
   };
   return {
     async me(): Promise<MeWithRequest> { return readMe(await call('/me')); },

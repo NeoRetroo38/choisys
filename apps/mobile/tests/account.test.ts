@@ -5,7 +5,7 @@ import { capabilitySet, navigationModel } from '../src/account/capabilities';
 import { ApiRequestError, errorMessage } from '../src/api/request';
 import { AccountRefreshGate, AccountSessionScope } from '../src/account/sessionScope';
 import { isLowerRole, roleChoices } from '../src/account/rolePresentation';
-import type { AuthState } from '../src/auth/sessionController';
+import { AuthClientError, SessionController, type AuthState } from '../src/auth/sessionController';
 
 const user = ['profile.read.own', 'profile.update.own', 'cube_data.read.own', 'cube_data.create.own', 'cube_data.export.own', 'account.delete.own'];
 const superdev = [...user, 'profile.read.any', 'account.disable', 'role.assign', 'role_changes.read', 'cube_data.read.any', 'cube_data.read.technical', 'system.manage'];
@@ -130,6 +130,82 @@ test('initial and focused refreshes join one request, never another account or l
   const previous = gate.run(2, async () => undefined);
   gate.clear(); // logout/unmount, even before the old promise settles
   assert.notEqual(gate.run(2, async () => undefined), previous);
+});
+
+test('a batched auth lifecycle changes the consumer boundary even for the same profile and token', () => {
+  const scope = new AccountSessionScope();
+  const auth = signedIn('session-a');
+  const original = scope.capture(auth);
+  assert.equal(scope.capture(auth), original); // data-only renders must not recreate the API or restart /me
+  // The provider observes controller events synchronously; React need not render either intermediate state.
+  scope.observe({ ...auth, status: 'loading' });
+  scope.observe({ status: 'signedOut', token: null, profile: null, error: null });
+  scope.observe(auth);
+  const next = scope.capture(auth);
+  assert.notEqual(next, original); // same auth primitives/object, fresh ticket without a React useMemo
+  assert.notEqual(next.id, original.id); // Fragment key={ticket.id} remounts every account/system consumer
+  assert.equal(scope.capture(auth), next); // following data renders remain stable
+  assert.equal(scope.isCurrent(next, auth), true);
+  assert.equal(scope.isCurrent(original, auth), false);
+});
+
+test('AUTH_REQUIRED from any current account endpoint revalidates and clears an invalid session', async () => {
+  let stored: string | null = 'session-a';
+  let invalid = false;
+  const controller = new SessionController({
+    signIn: async () => { throw new Error('not used'); }, register: async () => { throw new Error('not used'); },
+    signOut: async () => undefined,
+    me: async () => {
+      if (invalid) throw new AuthClientError('AUTH_REQUIRED');
+      return { ok: true, expiresAt: '2026-11-01T00:00:00Z', profile: { id: 'p1', displayName: 'Ana' } };
+    },
+  }, { getItem: async () => stored, setItem: async token => { stored = token; }, deleteItem: async () => { stored = null; } });
+  await controller.bootstrap();
+  const scope = new AccountSessionScope();
+  const ticket = scope.capture(controller.getState());
+  const unsubscribe = controller.subscribe(next => { scope.observe(next); });
+  let revalidation: Promise<void> | undefined;
+  invalid = true;
+  const api = createAccountApi('http://127.0.0.1:3000', () => ticket.token,
+    reply(401, { ok: false, error: { code: 'AUTH_REQUIRED' } }), () => scope.isCurrent(ticket, controller.getState()),
+    () => { revalidation = controller.bootstrap(); });
+  await assert.rejects(api.runs(), (error: unknown) => error instanceof ApiRequestError && error.code === 'AUTH_REQUIRED');
+  assert.ok(revalidation);
+  await revalidation;
+  assert.equal(controller.getState().status, 'signedOut');
+  assert.equal(stored, null);
+  unsubscribe();
+});
+
+test('late and concurrent unauthorized errors cannot revalidate a newer session twice', async () => {
+  const scope = new AccountSessionScope();
+  let auth = signedIn('session-a');
+  const ticket = scope.capture(auth);
+  let resolve!: (response: Response) => void;
+  const delayed = new Promise<Response>(finish => { resolve = finish; });
+  let revalidations = 0;
+  const stale = createAccountApi('http://127.0.0.1:3000', () => ticket.token, () => delayed,
+    () => scope.isCurrent(ticket, auth), () => { revalidations++; });
+  const oldResponse = stale.export();
+  auth = signedIn('session-b', 'p2'); scope.observe(auth);
+  resolve(await reply(401, { ok: false, error: { code: 'AUTH_REQUIRED' } })());
+  await assert.rejects(oldResponse, (error: unknown) => error instanceof ApiRequestError && error.code === 'STALE_SESSION');
+  assert.equal(revalidations, 0);
+  const nextTicket = scope.capture(auth);
+  const current = createAccountApi('http://127.0.0.1:3000', () => nextTicket.token,
+    reply(401, { ok: false, error: { code: 'AUTH_REQUIRED' } }), () => scope.isCurrent(nextTicket, auth), () => {
+      revalidations++; auth = { ...auth, status: 'loading' }; scope.observe(auth);
+    });
+  await Promise.allSettled([current.profiles(), current.roleRequests(), current.decideRoleRequest('rq1', true)]);
+  assert.equal(revalidations, 1);
+});
+
+test('an incorrect deletion password does not revalidate a valid session', async () => {
+  let revalidations = 0;
+  const api = createAccountApi('http://127.0.0.1:3000', () => 'session-a',
+    reply(401, { ok: false, error: { code: 'INVALID_CREDENTIALS' } }), () => true, () => { revalidations++; });
+  await assert.rejects(api.deleteAccount('incorrect'), (error: unknown) => error instanceof ApiRequestError && error.code === 'INVALID_CREDENTIALS');
+  assert.equal(revalidations, 0);
 });
 
 test('a late account response is discarded after logout, including a delayed body', async () => {
