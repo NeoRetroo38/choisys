@@ -23,6 +23,7 @@ const webPort = 8081;
 const token = loadToken();
 if (!token) { console.error('Falta el token local del motor. Ejecuta primero: node scripts/setup.mjs'); process.exit(1); }
 const databaseUrl = loadDatabaseUrl();
+const devAuthFile = join(homedir(), '.choisys', 'auth-v1.json');
 const hostArg = flag('--host') ? args[args.indexOf('--host') + 1] : undefined;  // e.g. a Tailscale address (100.x.y.z)
 if (flag('--host') && !/^\d{1,3}(\.\d{1,3}){3}$/.test(hostArg ?? '')) { console.error('--host necesita una IPv4, por ejemplo --host 100.81.78.2'); process.exit(1); }
 const host = hostArg ?? (lan ? privateIPv4() : '127.0.0.1');
@@ -60,7 +61,7 @@ const origins = [`http://localhost:${webPort}`, ...(lan ? [`http://${host}:${web
 start('api', 'npm', ['run', 'dev', '--workspace', 'apps/api'], {
   env: {
     CHOISYS_LOCAL_API_TOKEN: token, API_HOST: host, PORT: String(apiPort), API_ALLOWED_ORIGINS: origins,
-    ...(databaseUrl ? { DATABASE_URL: databaseUrl } : { CHOISYS_DEV_MEMORY_AUTH: '1' }),
+    ...(databaseUrl ? { DATABASE_URL: databaseUrl } : { CHOISYS_DEV_AUTH_FILE: devAuthFile }),
   },
 });
 
@@ -74,7 +75,7 @@ if (!check) {
   console.log('Arrancando motor, API y web…');
   console.log(`  Web:  http://localhost:${webPort}${lan ? `   (en el móvil, misma Wi-Fi: http://${host}:${webPort})` : ''}`);
   console.log(`  En directo (Safari, solo sudev): http://${host}:${apiPort}/live`);
-  console.log(databaseUrl ? '  Cuentas: en la base de datos (DATABASE_URL).' : '  Cuentas: EN MEMORIA (solo desarrollo; se pierden al reiniciar la API).');
+  console.log(databaseUrl ? '  Cuentas: en la base de datos (DATABASE_URL).' : '  Cuentas: almacén local privado y persistente de desarrollo.');
   console.log('  Para parar: Ctrl+C. HTTP sin cifrar: usa solo una red de confianza.');
 }
 

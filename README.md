@@ -41,8 +41,9 @@ base de datos**: todavía no hay una instancia PostgreSQL identificada.
 
 La API ya tiene autenticación de producto (`/auth/register`, `/auth/login`, `/auth/me` y
 `/auth/logout`). Sin `DATABASE_URL` el servicio de cuentas no está disponible; solo para
-desarrollo, `CHOISYS_DEV_MEMORY_AUTH=1` usa cuentas en memoria. Los endpoints públicos de
-perfil, historial y administración no existen todavía.
+desarrollo, `CHOISYS_DEV_MEMORY_AUTH=1` usa cuentas en memoria y `CHOISYS_DEV_AUTH_FILE`
+activa un almacén local privado y persistente (el launcher Tailscale lo configura fuera del repo).
+Los endpoints públicos de perfil, historial y administración no existen todavía.
 
 Con la migración aplicada, `npm run db:seed --workspace apps/api` carga el catálogo de
 permisos y las asignaciones por rol (se puede repetir sin efectos). Después, para asignar el
@@ -159,6 +160,8 @@ nunca `*`. Esta tarea no habilita Expo web ni instala sus dependencias.
 - `CHOISYS_LOCAL_LOG_DIR`: directorio local opcional de logs C++.
 - `DATABASE_URL`: conexión PostgreSQL usada únicamente por `apps/api` y Prisma;
   debe provisionarse fuera de Git.
+- `CHOISYS_DEV_AUTH_FILE`: archivo local externo al repositorio para conservar cuentas y
+  sesiones en la demo privada sin PostgreSQL; contiene solo hashes, nunca contraseñas ni tokens.
 
 Logs C++ por defecto:
 `C:\Users\Admin\Documents\Scenarys\logs\neo-cube\service.log`. Solo timestamp,
