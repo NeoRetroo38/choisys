@@ -5,12 +5,14 @@
 //   node scripts/dev.mjs --check         start, verify that all three answer, then stop (exit code 0/1)
 //   node scripts/dev.mjs --engine PATH    where the engine repository is (default ../neo-cube or NEO_CUBE_DIR)
 //   --no-engine  --no-web                 skip a part
+//   --dry-run                           validate URLs/CORS without starting services or loading secrets
 // Ctrl+C stops everything. It never prints the token or the database URL.
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { engineBinary, engineDir, isWindows, loadDatabaseUrl, loadToken, privateIPv4, repoRoot } from './lib/portable.mjs';
+import { discoverTailscaleNames, isTailscaleIPv4, runtimeConfig } from './lib/runtime.mjs';
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(name);
@@ -20,14 +22,22 @@ const check = flag('--check');
 const apiPort = 3000;
 const webPort = 8081;
 
-const token = loadToken();
-if (!token) { console.error('Falta el token local del motor. Ejecuta primero: node scripts/setup.mjs'); process.exit(1); }
-const databaseUrl = loadDatabaseUrl();
-const devAuthFile = join(homedir(), '.choisys', 'auth-v1.json');
 const hostArg = flag('--host') ? args[args.indexOf('--host') + 1] : undefined;  // e.g. a Tailscale address (100.x.y.z)
 if (flag('--host') && !/^\d{1,3}(\.\d{1,3}){3}$/.test(hostArg ?? '')) { console.error('--host necesita una IPv4, por ejemplo --host 100.81.78.2'); process.exit(1); }
 const host = hostArg ?? (lan ? privateIPv4() : '127.0.0.1');
 if (lan && !host) { console.error('No encuentro una IPv4 privada para --lan. Conéctate a tu Wi-Fi e inténtalo de nuevo.'); process.exit(1); }
+let runtime;
+try {
+  runtime = runtimeConfig({ host, apiPort, webPort,
+    dnsNames: isTailscaleIPv4(host) ? discoverTailscaleNames(host) : [],
+  });
+} catch (error) { console.error(error.message); process.exit(1); }
+if (flag('--dry-run')) { console.log(JSON.stringify(runtime)); process.exit(0); }
+
+const token = loadToken();
+if (!token) { console.error('Falta el token local del motor. Ejecuta primero: node scripts/setup.mjs'); process.exit(1); }
+const databaseUrl = process.env.DATABASE_URL ?? loadDatabaseUrl();
+const devAuthFile = join(homedir(), '.choisys', 'auth-v1.json');
 
 const children = [];
 function start(name, command, commandArgs, { cwd = repoRoot, env = {} } = {}) {
@@ -57,26 +67,25 @@ if (!flag('--no-engine')) {
   start('motor', engineBinary(engine), [], { cwd: engine, env: { CHOISYS_LOCAL_API_TOKEN: token, CHOISYS_LOCAL_LOG_DIR: logs } });
 }
 
-const origins = [`http://localhost:${webPort}`, ...(lan ? [`http://${host}:${webPort}`] : [])].join(',');
 start('api', 'npm', ['run', 'dev', '--workspace', 'apps/api'], {
   env: {
-    CHOISYS_LOCAL_API_TOKEN: token, API_HOST: host, PORT: String(apiPort), API_ALLOWED_ORIGINS: origins,
+    CHOISYS_LOCAL_API_TOKEN: token, API_HOST: host, PORT: String(apiPort), API_ALLOWED_ORIGINS: runtime.allowedOrigins.join(','),
     ...(databaseUrl ? { DATABASE_URL: databaseUrl } : { CHOISYS_DEV_AUTH_FILE: devAuthFile }),
   },
 });
 
 if (!flag('--no-web')) {
   start('web', 'npm', ['exec', '--workspace', 'apps/mobile', '--', 'expo', 'start', '--web', '--port', String(webPort)], {
-    env: { EXPO_PUBLIC_API_URL: `http://${host}:${apiPort}`, EXPO_NO_TELEMETRY: '1', CI: '1', ...(lan ? { REACT_NATIVE_PACKAGER_HOSTNAME: host } : {}) },
+    env: { EXPO_PUBLIC_API_URL: runtime.apiUrl, EXPO_NO_TELEMETRY: '1', CI: '1', ...(lan ? { REACT_NATIVE_PACKAGER_HOSTNAME: host } : {}) },
   });
 }
 
 if (!check) {
   console.log('Arrancando motor, API y web…');
-  console.log(`  Web:  http://localhost:${webPort}${lan ? `   (en el móvil, misma Wi-Fi: http://${host}:${webPort})` : ''}`);
-  console.log(`  En directo (Safari, solo sudev): http://${host}:${apiPort}/live`);
+  console.log(`  Web:  ${runtime.webOrigin}`);
+  console.log(`  En directo (Safari, solo sudev): ${runtime.apiUrl}/live`);
   console.log(databaseUrl ? '  Cuentas: en la base de datos (DATABASE_URL).' : '  Cuentas: almacén local privado y persistente de desarrollo.');
-  console.log('  Para parar: Ctrl+C. HTTP sin cifrar: usa solo una red de confianza.');
+  console.log('  Para parar: Ctrl+C. Los orígenes HTTPS necesitan un proxy privado ya configurado.');
 }
 
 // --check: wait until the three parts answer, report, and stop.

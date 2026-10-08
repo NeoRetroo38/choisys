@@ -45,6 +45,10 @@ Para volver al modo Wi-Fi de casa: `.\scripts\lan-always.ps1 -Install` (sin `-Ta
 - La API solo escucha en una dirección asignada al PC: loopback, IPv4 privada de la LAN o IPv4 de
   Tailscale (`100.64.0.0/10`). Nunca `0.0.0.0` ni IPs públicas (`apps/api/src/config.ts`).
 - `-Tailscale` toma la IP con `tailscale ip -4` y acepta como origen tanto la IP como el nombre MagicDNS.
+- Pasar `-Address` no impide descubrir el MagicDNS completo y corto de ese mismo PC.
+  Para un proxy HTTPS privado existente, define `EXPO_PUBLIC_API_URL` y
+  `CHOISYS_WEB_ORIGIN`; ambos launchers conservan esas URLs y el CORS exacto.
+  Consulta [`PRIVATE-RUNTIME.md`](PRIVATE-RUNTIME.md); no crean el proxy ni publican puertos.
 - Sin PostgreSQL, las cuentas y sesiones se conservan en `%LOCALAPPDATA%\choisys\auth-v1.json`;
   el archivo solo contiene hashes y no se sincroniza con el repositorio.
 - El modo se guarda en la variable de usuario `CHOISYS_TAILSCALE=1`, que también lee `lan-watch.ps1` al

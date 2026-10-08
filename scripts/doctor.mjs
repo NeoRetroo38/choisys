@@ -50,7 +50,7 @@ if (hasEngine) add(existsSync(engineBinary(engine)) ? 'ok' : 'warn', 'motor comp
 // Secrets file (never printed)
 const file = tokenFile();
 add(loadToken(file) ? 'ok' : 'warn', 'token local del motor', loadToken(file) ? `presente en ${file}` : `falta en ${file}`, 'node scripts/setup.mjs lo genera');
-add(loadDatabaseUrl(file) ? 'ok' : 'info', 'base de datos (DATABASE_URL)', loadDatabaseUrl(file) ? 'configurada' : 'sin configurar: se usarán cuentas en memoria (solo desarrollo)',
+add('info', 'base de datos (DATABASE_URL)', loadDatabaseUrl(file) ? 'URL presente; npm run check:neon comprueba conexión, migración y permisos sin escribir' : 'sin configurar: la demo usará un archivo privado persistente (solo desarrollo)',
   'añade una línea DATABASE_URL=... al archivo de secretos');
 
 const icon = { ok: '✅', warn: '⚠️ ', fail: '❌', info: 'ℹ️ ' };

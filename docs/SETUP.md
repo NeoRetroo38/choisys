@@ -38,7 +38,12 @@ DATABASE_URL=postgresql://... lo añades tú (por ejemplo, desde Neon); opcional
 ```
 
 **No copies el token de un equipo a otro: cada equipo genera el suyo.** Tampoco se copian `node_modules`, `build/`, copias de seguridad
-ni registros. Sin `DATABASE_URL`, las cuentas son **en memoria** (solo desarrollo; se pierden al reiniciar la API).
+ni registros. Sin `DATABASE_URL`, `dev.mjs` conserva las cuentas en un archivo privado
+persistente de desarrollo (`~/.choisys/auth-v1.json`). El modo de memoria solo se
+activa explícitamente con `CHOISYS_DEV_MEMORY_AUTH=1` al arrancar la API directamente.
+Comprueba la base sin escribir mediante `npm run check:neon`; la existencia de la URL
+no confirma conexión ni migración. Para URLs HTTPS privadas, consulta
+[`PRIVATE-RUNTIME.md`](PRIVATE-RUNTIME.md).
 
 ## Verificación
 

@@ -9,7 +9,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "check": "tsc --noEmit",
-    "test": "node --import tsx --test test/api.test.ts test/persistence.test.ts test/auth.test.ts test/permissions.test.ts test/bootstrap.test.ts test/permissionsSeed.test.ts test/rateLimit.test.ts test/me.test.ts test/roles.test.ts test/neon.test.ts",
+    "test": "node --import tsx --test test/api.test.ts test/persistence.test.ts test/auth.test.ts test/permissions.test.ts test/bootstrap.test.ts test/permissionsSeed.test.ts test/rateLimit.test.ts test/me.test.ts test/roles.test.ts test/databaseDiagnostics.test.ts test/neon.test.ts",
     "bootstrap:superdev": "tsx src/bootstrapCli.ts",
     "db:seed": "tsx src/seedCli.ts",
     "db:format": "prisma format --schema prisma/schema.prisma",
