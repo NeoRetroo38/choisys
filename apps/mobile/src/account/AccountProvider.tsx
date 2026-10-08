@@ -1,9 +1,10 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from 'react';
 import type { MeProfile } from '@scenarys/shared';
 import { useAuth } from '../auth/AuthProvider';
 import { ApiRequestError } from '../api/request';
 import { createAccountApi, type AccountApi, type OwnRoleRequest } from './accountApi';
 import { capabilitySet, navigationModel, type Capabilities, type NavigationModel } from './capabilities';
+import { AccountSessionScope } from './sessionScope';
 
 /**
  * AppShell state: identity + capabilities + navigation model, loaded once from GET /me after sign-in.
@@ -25,32 +26,59 @@ interface AccountContext extends AccountState {
 }
 
 const empty = capabilitySet(null);
+const emptyState: AccountState = { status: 'loading', profile: null, roleRequest: null, capabilities: empty, model: navigationModel(empty) };
 const context = createContext<AccountContext | null>(null);
 
 export function AccountProvider({ children }: PropsWithChildren) {
   const { controller, state: auth } = useAuth();
-  const api = useMemo(() => createAccountApi(process.env.EXPO_PUBLIC_API_URL, () => controller.getState().token), [controller]);
-  const [state, setState] = useState<AccountState>({ status: 'loading', profile: null, roleRequest: null, capabilities: empty, model: navigationModel(empty) });
+  const [scope] = useState(() => new AccountSessionScope());
+  const mounted = useRef(true);
+  const ticket = useMemo(() => scope.capture(controller.getState()), [scope, controller, auth.status, auth.token, auth.profile?.id]);
+  const isCurrent = useCallback(() => mounted.current && scope.isCurrent(ticket, controller.getState()), [scope, ticket, controller]);
+  // Bind every endpoint to this token. A delayed action must never use the next person's token.
+  const api = useMemo(() => createAccountApi(process.env.EXPO_PUBLIC_API_URL, () => ticket.token, fetch, isCurrent), [ticket, isCurrent]);
+  const [bound, setBound] = useState<{ id: number; state: AccountState }>({ id: -1, state: emptyState });
+  const refreshId = useRef(0);
+
+  useEffect(() => {
+    mounted.current = true;
+    const unsubscribe = controller.subscribe(next => {
+      if (scope.observe(next)) {
+        refreshId.current++;
+        setBound({ id: -1, state: emptyState });
+      }
+    });
+    return () => { mounted.current = false; refreshId.current++; unsubscribe(); };
+  }, [controller, scope]);
 
   const setProfile = useCallback((profile: MeProfile, keys: string[], roleRequest?: OwnRoleRequest | null) => {
+    if (!isCurrent() || profile.id !== controller.getState().profile?.id) return;
     const capabilities = capabilitySet(keys);
-    setState(current => ({ status: 'ready', profile, capabilities, model: navigationModel(capabilities),
-      roleRequest: roleRequest === undefined ? current.roleRequest : roleRequest }));
-  }, []);
+    setBound(current => !isCurrent() ? current : { id: ticket.id, state: {
+      status: 'ready', profile, capabilities, model: navigationModel(capabilities),
+      roleRequest: roleRequest === undefined && current.id === ticket.id ? current.state.roleRequest : roleRequest ?? null,
+    } });
+  }, [controller, isCurrent, ticket.id]);
 
   const refresh = useCallback(async () => {
+    if (!isCurrent()) return;
+    const operation = ++refreshId.current;
     try {
       const me = await api.me();
+      if (!isCurrent() || operation !== refreshId.current) return;
       setProfile(me.profile, me.capabilities, me.roleRequest);
     } catch (error) {
+      if (!isCurrent() || operation !== refreshId.current) return;
       if (error instanceof ApiRequestError && error.code === 'AUTH_REQUIRED') { void controller.bootstrap(); return; }
       const status = error instanceof ApiRequestError && error.code === 'NOT_FOUND' ? 'unavailable' : 'error';
-      setState({ status, profile: null, roleRequest: null, capabilities: empty, model: navigationModel(empty) });
+      setBound({ id: ticket.id, state: { ...emptyState, status } });
     }
-  }, [api, controller, setProfile]);
+  }, [api, controller, setProfile, isCurrent, ticket.id]);
 
   useEffect(() => { if (auth.status === 'signedIn') void refresh(); }, [auth.status, auth.token, refresh]);
 
+  // Mask old data during the very first render of a changed session, before effects run.
+  const state = isCurrent() && bound.id === ticket.id ? bound.state : emptyState;
   return <context.Provider value={{ ...state, api, refresh, setProfile }}>{children}</context.Provider>;
 }
 

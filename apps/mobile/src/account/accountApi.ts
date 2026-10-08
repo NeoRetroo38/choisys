@@ -84,9 +84,14 @@ function readAdminProfile(item: unknown): AdminProfileRow {
 /** Own-account and SUPERDEV endpoints (docs/ROLES.md). The server decides; this client reads and validates. */
 export const adminPaths = { profiles: '/admin/profiles', roleChanges: '/admin/role-changes', roleRequests: '/admin/role-requests' } as const;
 
-export function createAccountApi(baseUrl: string | undefined, getToken: () => string | null, transport: ApiTransport = fetch) {
-  const call = (path: string, body?: unknown, maxBytes?: number) =>
-    apiRequest(baseUrl, path, { body, token: getToken(), maxBytes }, transport);
+export function createAccountApi(baseUrl: string | undefined, getToken: () => string | null, transport: ApiTransport = fetch,
+  isCurrent: () => boolean = () => true) {
+  const call = async (path: string, body?: unknown, maxBytes?: number, timeoutMs?: number) => {
+    if (!isCurrent()) throw new ApiRequestError('STALE_SESSION');
+    const data = await apiRequest(baseUrl, path, { body, token: getToken(), maxBytes, timeoutMs }, transport);
+    if (!isCurrent()) throw new ApiRequestError('STALE_SESSION');
+    return data;
+  };
   return {
     async me(): Promise<MeWithRequest> { return readMe(await call('/me')); },
     async rename(displayName: string): Promise<MeWithRequest> { return readMe(await call('/me/profile', { displayName })); },
@@ -108,7 +113,7 @@ export function createAccountApi(baseUrl: string | undefined, getToken: () => st
     },
     async health(): Promise<{ service: string; version: string; latencyMs: number }> {
       const started = Date.now();
-      const data = await apiRequest(baseUrl, '/health', { timeoutMs: 5000, maxBytes: 1024 }, transport);
+      const data = await call('/health', undefined, 1024, 5000);
       if (!record(data) || data.ok !== true || !isText(data.service) || !isText(data.version)) throw invalid();
       return { service: data.service, version: data.version, latencyMs: Date.now() - started };
     },
@@ -144,9 +149,12 @@ export function createAccountApi(baseUrl: string | undefined, getToken: () => st
       return data.requests.map(readRequestRow);
     },
     /** Approving changes the role on the server and writes the audit entry; the client only reports the decision. */
-    async decideRoleRequest(requestId: string, approve: boolean): Promise<void> {
+    async decideRoleRequest(requestId: string, approve: boolean): Promise<OwnRoleRequest> {
       const data = await call(`${adminPaths.roleRequests}/${encodeURIComponent(requestId)}/decision`, { approve });
       if (!record(data) || data.ok !== true) throw invalid();
+      const request = readOwnRequest(data.roleRequest);
+      if (!request || request.id !== requestId || request.status !== (approve ? 'APPROVED' : 'REJECTED')) throw invalid();
+      return request;
     },
   };
 }

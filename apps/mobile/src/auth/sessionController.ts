@@ -71,6 +71,7 @@ function authErrorMessage(error: unknown): string {
     case 'ACCOUNT_EXISTS': return 'Ya existe una cuenta con este correo. Inicia sesión.';
     case 'AUTH_RATE_LIMITED': return 'Has realizado demasiados intentos. Espera un momento y vuelve a intentarlo.';
     case 'INVALID_REQUEST': return 'Revisa el nombre, el correo y la contraseña.';
+    case 'ROLE_REQUESTS_UNAVAILABLE': return 'Las solicitudes de rol no están disponibles. Elige usuario para registrarte.';
     case 'REQUEST_TIMEOUT': return 'La conexión ha tardado demasiado. Vuelve a intentarlo.';
     case 'CONFIGURATION_ERROR': return 'La conexión con el servicio todavía no está configurada.';
     default: return 'No se ha podido conectar con el servicio. Vuelve a intentarlo.';

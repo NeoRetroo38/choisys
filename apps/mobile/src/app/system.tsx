@@ -17,7 +17,7 @@ type Loaded<T> = { data: T } | { error: string } | null;
 
 /** The control surface. Each part appears only if the API granted its capability, and each request is still checked by the server. */
 export default function System() {
-  const { api, capabilities, model, status } = useAccount();
+  const { api, capabilities, model, status, profile } = useAccount();
   const [health, setHealth] = useState<ServiceState[]>([{ name: 'api', state: 'checking' }]);
   const [people, setPeople] = useState<Loaded<AdminProfileRow[]>>(null);
   const [audit, setAudit] = useState<Loaded<RoleChangeRow[]>>(null);
@@ -70,7 +70,7 @@ export default function System() {
         <Section label="solicitudes">
           {requests === null ? <EmptyState text="…" /> : 'error' in requests ? <EmptyState alert text={requests.error} /> :
             requests.data.length === 0 ? <EmptyState text="Nadie espera un rol." /> :
-            requests.data.map(request => <RoleRequestRow key={request.id} request={request}
+            requests.data.map(request => <RoleRequestRow key={request.id} request={request} actorRole={profile?.role}
               onDecide={model.system.assignRole ? approve => decide(request, approve) : undefined} />)}
           {requestNotice && <EmptyState alert text={requestNotice} />}
         </Section>
@@ -80,7 +80,7 @@ export default function System() {
         <Section label="perfiles">
           {people === null ? <EmptyState text="…" /> : 'error' in people ? <EmptyState alert text={people.error} /> :
             people.data.length === 0 ? <EmptyState text="No hay perfiles." /> :
-            people.data.map(person => <ProfileControls key={person.id} person={person}
+            people.data.map(person => <ProfileControls key={person.id} person={person} actorRole={profile?.role}
               onAssignRole={model.system.assignRole ? role => act(() => api.assignRole(person.id, role)) : undefined}
               onSetDisabled={model.system.disable ? disabled => act(() => api.setDisabled(person.id, disabled)) : undefined} />)}
           {notice && <EmptyState alert text={notice} />}

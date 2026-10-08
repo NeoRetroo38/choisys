@@ -118,6 +118,15 @@ test('a rejected sign-in uses safe UI text and does not persist credentials', as
   assert.equal(setup.saved(), null);
 });
 
+test('unavailable role requests explain registration fallback without saving a session', async () => {
+  const setup = fixture(null, { register: async () => { throw new AuthClientError('ROLE_REQUESTS_UNAVAILABLE', 'private diagnostic', 503); } });
+  await setup.controller.register({ ...credentials, displayName: 'Ana', requestedRole: 'DEV' });
+  assert.equal(setup.controller.getState().status, 'signedOut');
+  assert.match(setup.controller.getState().error!, /Elige usuario/);
+  assert.equal(setup.controller.getState().error!.includes('private diagnostic'), false);
+  assert.equal(setup.saved(), null);
+});
+
 test('logout revokes the server session before deleting the secure token', async () => {
   const setup = fixture('stored-token');
   await setup.controller.bootstrap();
