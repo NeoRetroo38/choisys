@@ -8,6 +8,9 @@ import { authRoutes } from './auth/authRoutes.js';
 import type { RateLimiter } from './rateLimit.js';
 import type { AuthService } from './auth/authService.js';
 import type { RunRecorder } from './services/runRecorder.js';
+import type { MeService } from './services/meService.js';
+import { meRoutes } from './meRoutes.js';
+import { RateLimiter as MeLimiter } from './rateLimit.js';
 export interface AppDependencies {
   auth?: AuthService | null;
   /** Test harness only. Runtime bootstrap always requires account authentication. */
@@ -16,6 +19,8 @@ export interface AppDependencies {
   productLimiter?: RateLimiter;
   /** Saves completed Runs to the person's history; absent without a database. */
   runRecorder?: RunRecorder;
+  /** Own-account endpoints (/me); absent without a database. */
+  me?: MeService;
 }
 export function createApp(config: ApiConfig, cube: CubeClient = new NeoCubeClient(config.token, config.timeoutMs), dependencies: AppDependencies = {}) {
   const app = express();
@@ -45,6 +50,7 @@ export function createApp(config: ApiConfig, cube: CubeClient = new NeoCubeClien
   app.use(express.json({ limit: '8kb', strict: true, inflate: false }));
   app.use(authRoutes(dependencies.auth ?? null));
   app.use(productRoutes(new SessionService(cube, undefined, dependencies.runRecorder), dependencies.auth ?? null, dependencies.allowUnauthenticatedProduct === true, dependencies.productLimiter));
+  if (dependencies.me) app.use(meRoutes(dependencies.auth ?? null, dependencies.me, dependencies.productLimiter ?? new MeLimiter()));
   app.use((_req, _res, next) => next(new ApiError(404, 'NOT_FOUND')));
   const errors: ErrorRequestHandler = (error: unknown, _req, res, _next) => {
     let safe = error instanceof ApiError ? error : new ApiError(500, 'INTERNAL_ERROR');

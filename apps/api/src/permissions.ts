@@ -46,3 +46,5 @@ export const roleGrants: Record<Role, readonly PermissionKey[]> = {
 export function roleHasPermission(role: Role, key: PermissionKey): boolean {
   return roleGrants[role].includes(key);
 }
+
+export function permissionsFor(role: Role): PermissionKey[] { return [...roleGrants[role]]; }
