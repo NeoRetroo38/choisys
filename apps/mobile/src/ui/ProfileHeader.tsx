@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import RoleBadge from './RoleBadge';
-import { color, font, space } from './theme';
+import { color, font, space, inputChrome } from './theme';
 
 interface ProfileHeaderProps {
   name: string;
@@ -29,7 +29,7 @@ export default function ProfileHeader({ name, role, since, onRename }: ProfileHe
           <Text style={styles.name}>{name}</Text>
         </Pressable>
       ) : (
-        <TextInput value={draft} onChangeText={setDraft} autoFocus editable={!saving} maxLength={120}
+        <TextInput {...inputChrome} value={draft} onChangeText={setDraft} autoFocus editable={!saving} maxLength={120}
           onSubmitEditing={() => void save()} onBlur={() => void save()} returnKeyType="done"
           accessibilityLabel="Tu nombre" style={[styles.name, styles.input]} />
       )}

@@ -6,6 +6,7 @@ import { useAccount } from '../account/AccountProvider';
 import { roleLabel } from '../account/capabilities';
 import { deliverExport } from '../account/exportData';
 import { errorMessage } from '../api/request';
+import { CONTACT_PHONE, useCopyPhone } from '../contact';
 import { useAuth } from '../auth/AuthProvider';
 import type { RunMeasurements } from '../history/runHistory';
 import CubeView from '../screens/CubeView';
@@ -14,7 +15,7 @@ import EmptyState from '../ui/EmptyState';
 import ProfileHeader from '../ui/ProfileHeader';
 import Screen from '../ui/Screen';
 import Section from '../ui/Section';
-import { color, font, space } from '../ui/theme';
+import { color, font, space, inputChrome } from '../ui/theme';
 
 /** Everything about "me" on one screen: who I am, my cube, my data, my session. */
 export default function Account() {
@@ -25,6 +26,7 @@ export default function Account() {
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<'export' | 'delete' | null>(null);
   const [password, setPassword] = useState<string | null>(null);
+  const [copied, copyPhone] = useCopyPhone();
   const back = () => router.canGoBack() ? router.back() : router.replace('/');
   const { model, profile, api, roleRequest } = account;
   const refresh = account.refresh;
@@ -92,6 +94,11 @@ export default function Account() {
         {model.system.visible && <ActionRow label="Sistema" value="→" onPress={() => router.push('/system')} />}
       </Section>}
 
+      <Section label="contacto">
+        <ActionRow label="Teléfono de Scenarys" detail={copied ? 'Copiado' : 'Toca para copiarlo'} value={CONTACT_PHONE.label}
+          onPress={copyPhone} accessibilityHint="Copia el número al portapapeles" />
+      </Section>
+
       <Section label="sesión">
         <ActionRow label="Cerrar sesión" onPress={() => void controller.signOut()} />
         {model.account.delete && (password === null
@@ -99,7 +106,7 @@ export default function Account() {
               onPress={() => setPassword('')} />
           : <View style={styles.confirmDelete}>
               <Text style={styles.deleteText}>Escribe tu contraseña para borrar la cuenta.</Text>
-              <TextInput value={password} onChangeText={setPassword} secureTextEntry autoFocus autoComplete="current-password"
+              <TextInput {...inputChrome} value={password} onChangeText={setPassword} secureTextEntry autoFocus autoComplete="current-password"
                 accessibilityLabel="Contraseña" onSubmitEditing={() => void deleteAccount()} style={styles.password} />
               <ActionRow label="Borrar definitivamente" tone="danger" busy={busy === 'delete'} onPress={() => void deleteAccount()} />
               <ActionRow label="Cancelar" onPress={() => setPassword(null)} />
