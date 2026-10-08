@@ -9,16 +9,19 @@ interface AuthScreenProps {
   mode: 'login' | 'register';
   busy: boolean;
   error: string | null;
-  onSubmit: (input: { email: string; password: string; displayName: string }) => void;
+  onSubmit: (input: { email: string; password: string; displayName: string; requestedRole?: string }) => void;
   onModeChange: () => void;
+  /** Account types offered at sign-up; the first one is the default (plain user). Absent: no choice shown. */
+  roleOptions?: { value: string; label: string }[];
 }
 
-export default function AuthScreen({ mode, busy, error, onSubmit, onModeChange }: AuthScreenProps) {
+export default function AuthScreen({ mode, busy, error, onSubmit, onModeChange, roleOptions }: AuthScreenProps) {
   const { height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [requestedRole, setRequestedRole] = useState(roleOptions?.[0]?.value);
   const [validationError, setValidationError] = useState<string | null>(null);
   const emailInput = useRef<TextInput>(null);
   const passwordInput = useRef<TextInput>(null);
@@ -39,7 +42,8 @@ export default function AuthScreen({ mode, busy, error, onSubmit, onModeChange }
       return;
     }
     setValidationError(null);
-    onSubmit({ email: email.trim(), password, displayName: displayName.trim() });
+    onSubmit({ email: email.trim(), password, displayName: displayName.trim(),
+      ...(register && requestedRole && requestedRole !== roleOptions?.[0]?.value ? { requestedRole } : {}) });
   }
 
   return (
@@ -92,6 +96,23 @@ export default function AuthScreen({ mode, busy, error, onSubmit, onModeChange }
               returnKeyType="go" onSubmitEditing={submit} maxLength={128} />
           </View>
 
+          {register && roleOptions && roleOptions.length > 1 && <View style={styles.field}>
+            <Text style={styles.label}>Tipo de cuenta</Text>
+            <View style={styles.roles} accessibilityRole="radiogroup">
+              {roleOptions.map(option => {
+                const selected = option.value === requestedRole;
+                return <Pressable key={option.value} accessibilityRole="radio" accessibilityState={{ selected, disabled: busy }}
+                  disabled={busy} onPress={() => setRequestedRole(option.value)}
+                  style={({ pressed }) => [styles.role, selected && styles.roleSelected, pressed && styles.pressed]}>
+                  <Text style={[styles.roleText, selected && styles.roleTextSelected]}>{option.label}</Text>
+                </Pressable>;
+              })}
+            </View>
+            {requestedRole !== roleOptions[0].value && <Text style={styles.roleHint}>
+              Entras como usuario. Un sudev aprobará el rol que pides.
+            </Text>}
+          </View>}
+
           {(validationError || error) && <Text accessibilityRole="alert" accessibilityLiveRegion="polite"
             style={styles.error}>{validationError || error}</Text>}
 
@@ -133,6 +154,12 @@ const styles = StyleSheet.create({
   switchMode: { minHeight: 48, paddingVertical: 16, alignItems: 'center', justifyContent: 'center', marginTop: 13 },
   switchText: { color: '#666666', fontSize: 13, lineHeight: 21, textAlign: 'center' },
   switchLink: { color: '#000000', textDecorationLine: 'underline' },
+  roles: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
+  role: { minHeight: 40, paddingHorizontal: 14, justifyContent: 'center', borderRadius: 999, borderWidth: StyleSheet.hairlineWidth, borderColor: '#000000' },
+  roleSelected: { backgroundColor: '#000000' },
+  roleText: { fontSize: 13, color: '#000000', fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }) },
+  roleTextSelected: { color: '#ffffff' },
+  roleHint: { marginTop: 10, color: '#666666', fontSize: 12, lineHeight: 18 },
   disabled: { opacity: 0.5 },
   pressed: { opacity: 0.65 },
 });

@@ -10,6 +10,8 @@ export interface SignInCredentials {
 
 export interface RegisterCredentials extends SignInCredentials {
   displayName: string;
+  /** A role above USER is only requested; the account starts as USER until a sudev approves it. */
+  requestedRole?: 'ADMIN' | 'DEV' | 'SUPERADMIN' | 'SUPERDEV';
 }
 
 export interface AuthSessionResponse {
