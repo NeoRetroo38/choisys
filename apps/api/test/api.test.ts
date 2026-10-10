@@ -103,12 +103,12 @@ test('known upstream errors become controlled public codes', async () => {
 test('request validation rejects duplicates, inconsistent choices and private fields', () => {
   assert.deepEqual(evaluateInput(input), input);
   for (const value of [
-    { ...input, scenarioId: 'unknown' }, { ...input, phase: 4 }, { ...input, sessionId: '../invalid' },
+    { ...input, scenarioId: 'unknown' }, { ...input, phase: 11 }, { ...input, phase: 0 }, { ...input, sessionId: '../invalid' },
     { ...input, internal: true }, { ...input, decisions: [] },
     { ...input, decisions: [input.decisions[0], input.decisions[0]] },
     { ...input, decisions: [{ position: 1, selected: false, value: 0 }] },
     { ...input, decisions: [{ position: 1, selected: true, value: 0 }] },
-    { ...input, decisions: [{ position: 10, selected: true, value: 1 }] },
+    { ...input, decisions: [{ position: 101, selected: true, value: 1 }] },
   ]) assert.throws(() => evaluateInput(value), { code: 'INVALID_REQUEST' });
 });
 
@@ -116,24 +116,24 @@ test('sessions enforce expiry, capacity, unknown identity and concurrent lock', 
   let now = 0;
   let finish!: (value: EvaluateResponse) => void;
   const sessions = new SessionService({ evaluate: () => new Promise(resolve => { finish = resolve; }) }, () => now);
-  const session = sessions.start({ scenarioId: 'choice-grid' }).session;
+  const session = (await sessions.start({ scenarioId: 'choice-grid' })).session;
   const request = { ...input, sessionId: session.sessionId };
   await rejectsCode(sessions.evaluate(input), 404, 'SESSION_NOT_FOUND');
   const pending = sessions.evaluate(request);
   await rejectsCode(sessions.evaluate(request), 409, 'SESSION_BUSY');
   finish(success(request));
   assert.deepEqual(await pending, { ...success(request), result: { ...success(request).result, phaseTransitions: [] } });
-  for (let i = 1; i < 256; i++) sessions.start({ scenarioId: 'choice-grid' });
-  assert.throws(() => sessions.start({ scenarioId: 'choice-grid' }), { code: 'SESSION_LIMIT_REACHED' });
+  for (let i = 1; i < 256; i++) await sessions.start({ scenarioId: 'choice-grid' });
+  await assert.rejects(sessions.start({ scenarioId: 'choice-grid' }), { code: 'SESSION_LIMIT_REACHED' });
   now = 30 * 60 * 1000;
   await rejectsCode(sessions.evaluate(request), 404, 'SESSION_NOT_FOUND');
-  assert.equal(sessions.start({ scenarioId: 'choice-grid' }).session.phase, 1);
+  assert.equal((await sessions.start({ scenarioId: 'choice-grid' })).session.phase, 1);
 });
 
 test('sessions measure each successful phase transition and enforce phase order', async () => {
   let now = 1000;
   const sessions = new SessionService({ evaluate: async request => success(request) }, () => now);
-  const sessionId = sessions.start({ scenarioId: 'choice-grid' }).session.sessionId;
+  const sessionId = (await sessions.start({ scenarioId: 'choice-grid' })).session.sessionId;
   const phase = (value: 1 | 2 | 3): EvaluateRequest => ({ ...input, sessionId, phase: value });
 
   assert.deepEqual((await sessions.evaluate(phase(1))).result.phaseTransitions, []);
@@ -148,7 +148,7 @@ test('sessions measure each successful phase transition and enforce phase order'
   ]);
   // Skipping ahead is refused by the API.
   const skipping = new SessionService({ evaluate: async request => success(request) }, () => now);
-  const skipId = skipping.start({ scenarioId: 'choice-grid' }).session.sessionId;
+  const skipId = (await skipping.start({ scenarioId: 'choice-grid' })).session.sessionId;
   await rejectsCode(skipping.evaluate({ ...input, sessionId: skipId, phase: 2 }), 409, 'SESSION_CONFLICT');
   await rejectsCode(skipping.evaluate({ ...input, sessionId: skipId, phase: 3 }), 409, 'SESSION_CONFLICT');
 });
@@ -157,7 +157,7 @@ test('retrying an already accepted phase is idempotent and records no new transi
   let now = 1000;
   const calls: number[] = [];
   const sessions = new SessionService({ evaluate: async request => { calls.push(request.phase); return success(request); } }, () => now);
-  const sessionId = sessions.start({ scenarioId: 'choice-grid' }).session.sessionId;
+  const sessionId = (await sessions.start({ scenarioId: 'choice-grid' })).session.sessionId;
   const phase = (value: 1 | 2 | 3): EvaluateRequest => ({ ...input, sessionId, phase: value });
 
   const first = await sessions.evaluate(phase(1));
@@ -247,7 +247,7 @@ test('a completed Run is handed to the recorder once, and a recorder failure doe
     recordCompleted: async (profileId, saved) => { if (fail) throw new Error('db down'); stored.push({ profileId, measurements: saved }); },
   });
   const run = async (profileId: string) => {
-    const { session } = service.start({ scenarioId: 'choice-grid' }, profileId);
+    const { session } = (await service.start({ scenarioId: 'choice-grid' }, profileId));
     let last;
     for (const phase of [1, 2, 3] as const) last = await service.evaluate({ ...input, sessionId: session.sessionId, phase }, profileId);
     return { sessionId: session.sessionId, last };
@@ -259,4 +259,27 @@ test('a completed Run is handed to the recorder once, and a recorder failure doe
   assert.equal(stored.length, 1);
   fail = true;
   assert.equal((await run('profile-b')).last?.result.status, 'completed');
+});
+
+test('la sesión aplica la forma del cubo: vanilla no admite fase 4 ni círculo 10; un cubo propio usa la suya', async () => {
+  const seen: unknown[] = [];
+  const cube = { evaluate: async (request: EvaluateRequest, shape?: { phases: number }) => { seen.push(shape); return success(request); } };
+  const vanilla = new SessionService(cube);
+  const { session } = await vanilla.start({ scenarioId: 'choice-grid' });
+  await rejectsCode(vanilla.evaluate({ ...input, sessionId: session.sessionId, phase: 4 }), 400, 'INVALID_REQUEST');
+  await rejectsCode(vanilla.evaluate({ ...input, sessionId: session.sessionId, decisions: [{ position: 10, selected: true, value: 1 }] }), 400, 'INVALID_REQUEST');
+  await rejectsCode(vanilla.evaluate({ ...input, scenarioId: 'custom', sessionId: session.sessionId }), 400, 'INVALID_REQUEST');
+
+  const shapes = async (profileId: string, cubeId: string) => {
+    if (profileId !== 'owner' || cubeId !== 'c') throw Object.assign(new Error('x'), { status: 404, code: 'NOT_FOUND' });
+    return { shape: { phases: 2, rows: 1, columns: 4 }, cubeVersionId: 'v1' };
+  };
+  const own = new SessionService(cube, undefined, undefined, shapes);
+  const started = await own.start({ scenarioId: 'custom', cubeId: 'c' }, 'owner');
+  assert.deepEqual(started.session.shape, { phases: 2, rows: 1, columns: 4 });
+  await rejectsCode(own.evaluate({ ...input, scenarioId: 'custom', sessionId: started.session.sessionId, decisions: [{ position: 5, selected: true, value: 1 }] }, 'owner'), 400, 'INVALID_REQUEST');
+  await own.evaluate({ ...input, scenarioId: 'custom', sessionId: started.session.sessionId, decisions: [{ position: 4, selected: true, value: 1 }] }, 'owner');
+  assert.deepEqual(seen.at(-1), { phases: 2, rows: 1, columns: 4 });
+  await assert.rejects(own.start({ scenarioId: 'custom', cubeId: 'c' }, 'intruder'));
+  await assert.rejects(vanilla.start({ scenarioId: 'custom', cubeId: 'c' }, 'owner'), { code: 'NOT_FOUND' });
 });

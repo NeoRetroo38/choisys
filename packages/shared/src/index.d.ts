@@ -1,7 +1,12 @@
 /** Public transport contracts only. The local C++ service owns evaluation. */
-export type ScenarioId = 'choice-grid';
-export type Phase = 1 | 2 | 3;
-export type Position = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+/** 'choice-grid' = el cubo vanilla 3×(3×3); 'custom' = un cubo de usuario (choisys#84), hasta 10 fases de 10×10. */
+export type ScenarioId = 'choice-grid' | 'custom';
+/** 1-based. Vanilla: 1–3; custom: 1–10. */
+export type Phase = number;
+/** 1-based, filas × columnas de la fase. Vanilla: 1–9; custom: hasta 100. */
+export type Position = number;
+/** Forma uniforme de un cubo: todas las fases comparten filas × columnas. */
+export interface CubeShape { phases: number; rows: number; columns: number }
 export interface Decision { position: Position; selected: boolean; value: 0 | 1 }
 /** Authentication transport contains only public profile fields. */
 export interface PublicProfile { id: string; displayName: string }
@@ -9,10 +14,10 @@ export interface RegisterRequest { email: string; password: string; displayName:
 export interface LoginRequest { email: string; password: string }
 export interface AuthResponse { ok: true; token: string; expiresAt: string; profile: PublicProfile }
 export interface AuthMeResponse { ok: true; expiresAt: string; profile: PublicProfile }
-export interface StartSessionRequest { scenarioId: ScenarioId }
+export type StartSessionRequest = { scenarioId: 'choice-grid' } | { scenarioId: 'custom'; cubeId: string };
 export interface StartSessionResponse {
   ok: true;
-  session: { sessionId: string; scenarioId: ScenarioId; phase: 1 };
+  session: { sessionId: string; scenarioId: ScenarioId; phase: 1; shape: CubeShape };
 }
 export interface EvaluateRequest {
   scenarioId: ScenarioId;
@@ -21,10 +26,10 @@ export interface EvaluateRequest {
   decisions: Decision[];
 }
 /** One selection already stored by the engine; 1-based. Drawn by clients, never derived by them. */
-export interface Measurement { phase: Phase; row: 1 | 2 | 3; column: 1 | 2 | 3 }
+export interface Measurement { phase: Phase; row: number; column: number }
 export interface PhaseTransitionTiming {
-  fromPhase: 1 | 2;
-  toPhase: 2 | 3;
+  fromPhase: number;
+  toPhase: number;
   durationMs: number;
 }
 export interface EvaluateResponse {
@@ -33,7 +38,7 @@ export interface EvaluateResponse {
     sessionId: string;
     phase: Phase;
     status: 'phase-complete' | 'completed';
-    nextPhase: 2 | 3 | null;
+    nextPhase: number | null;
     /** Observable time from completing one phase until submitting the next. Added by the product API. */
     phaseTransitions?: PhaseTransitionTiming[];
     /** Present only when status is 'completed'. */
@@ -47,7 +52,7 @@ export type ApiErrorCode =
   | 'SESSION_NOT_FOUND' | 'SESSION_LIMIT_REACHED' | 'SESSION_BUSY'
   | 'SESSION_CONFLICT' | 'FORBIDDEN' | 'ALREADY_DECIDED' | 'ROLE_REQUESTS_UNAVAILABLE'
   | 'NEO_CUBE_UNAVAILABLE' | 'NEO_CUBE_TIMEOUT'
-  | 'NEO_CUBE_INVALID_RESPONSE' | 'NEO_CUBE_AUTH_FAILED';
+  | 'NEO_CUBE_INVALID_RESPONSE' | 'NEO_CUBE_AUTH_FAILED' | 'CUBE_NOT_PLAYABLE';
 export interface ApiErrorResponse {
   ok: false;
   error: { code: ApiErrorCode; message: string };

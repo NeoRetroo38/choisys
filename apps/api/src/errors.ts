@@ -13,7 +13,7 @@ const messages: Record<ApiErrorCode, string> = {
   ALREADY_DECIDED: 'This role request has already been decided.',
   ROLE_REQUESTS_UNAVAILABLE: 'Role requests are not available on this server.',
   NEO_CUBE_UNAVAILABLE: 'Local evaluation service unavailable.', NEO_CUBE_TIMEOUT: 'Local evaluation timed out. Retry the same selection.',
-  NEO_CUBE_INVALID_RESPONSE: 'Invalid local evaluation response.', NEO_CUBE_AUTH_FAILED: 'Local evaluation authentication failed.',
+  NEO_CUBE_INVALID_RESPONSE: 'Invalid local evaluation response.', NEO_CUBE_AUTH_FAILED: 'Local evaluation authentication failed.', CUBE_NOT_PLAYABLE: 'All phases of a cube must share rows and columns.',
 };
 export class ApiError extends Error {
   constructor(readonly status: number, readonly code: ApiErrorCode) { super(messages[code]); }

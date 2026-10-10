@@ -38,7 +38,7 @@ export class MeService {
 
   async runs(actor: AuthActor): Promise<RunSummary[]> {
     const rows = await this.db.cubeData.findMany({
-      where: { profileId: actor.profileId, type: 'RUN' }, orderBy: { createdAt: 'desc' }, take: MAX_RUNS,
+      where: { profileId: actor.profileId, type: 'RUN', cubeVersionId: null }, orderBy: { createdAt: 'desc' }, take: MAX_RUNS,
       select: { id: true, createdAt: true, status: true, outputData: true },
     });
     return rows.map(row => ({

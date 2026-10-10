@@ -17,7 +17,7 @@ test('selection, loading, three responses and completion use the product API con
     paths.push(String(input));
     assert.equal(new Headers(options?.headers).has('authorization'), false);
     if (String(input).endsWith('/sessions')) {
-      return json({ ok: true, session: { sessionId, scenarioId: 'choice-grid', phase: 1 } });
+      return json({ ok: true, session: { sessionId, scenarioId: 'choice-grid', phase: 1, shape: { phases: 3, rows: 3, columns: 3 } } });
     }
     const payload = JSON.parse(String(options?.body)) as EvaluateRequest;
     assert.equal(payload.decisions[0].position, 5);
@@ -58,7 +58,7 @@ test('a timeout preserves the exact pending selection and prevents changing it b
     options?.signal?.addEventListener('abort', () => reject(new Error('transport detail')), { once: true });
   });
   const client = createProductClient('http://127.0.0.1:3000', transport, 10);
-  let state = sessionReducer(initialState, { type: 'started', session: { sessionId, scenarioId: 'choice-grid', phase: 1 } });
+  let state = sessionReducer(initialState, { type: 'started', session: { sessionId, scenarioId: 'choice-grid', phase: 1, shape: { phases: 3, rows: 3, columns: 3 } } });
   state = sessionReducer(state, { type: 'selected', position: 5 });
   state = sessionReducer(state, { type: 'sending', request });
   await assert.rejects(client.evaluate(request), (error: unknown) => {
@@ -146,4 +146,11 @@ test('product timeout and capacity errors have specific safe messages', async ()
       return true;
     });
   }
+});
+
+test('la web nueva sigue jugando el vanilla contra una API que aún no devuelve la forma', async () => {
+  const sessionId = '00000000-0000-4000-8000-000000000001';
+  const old = createProductClient('https://api.example', async () => new Response(JSON.stringify({ ok: true, session: { sessionId, scenarioId: 'choice-grid', phase: 1 } }), { headers: { 'content-type': 'application/json' } }));
+  assert.deepEqual((await old.startSession()).session.shape, { phases: 3, rows: 3, columns: 3 });
+  await assert.rejects(old.startSession('00000000-0000-4000-8000-000000000002'));
 });

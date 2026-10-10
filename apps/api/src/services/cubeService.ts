@@ -98,6 +98,20 @@ export class CubeService {
     return { ok: true, cube: detail };
   }
 
+  /** Forma para jugar un cubo propio: todas las fases comparten filas × columnas. Ajeno o inexistente → 404. */
+  async playable(profileId: string, cubeId: string): Promise<{ shape: { phases: number; rows: number; columns: number }; cubeVersionId: string }> {
+    const cube = await this.db.cube.findFirst({
+      where: { id: cubeId, ownerProfileId: profileId },
+      select: { versions: { orderBy: { version: 'desc' }, take: 1, select: { id: true, phases: true } } },
+    });
+    const latest = cube?.versions[0];
+    if (!latest) throw new ApiError(404, 'NOT_FOUND');
+    const phases = latest.phases as unknown as CubePhaseDefinition[];
+    const rows = phases[0]?.rows.length ?? 0, columns = phases[0]?.columns.length ?? 0;
+    if (!phases.length || phases.some(p => p.rows.length !== rows || p.columns.length !== columns)) throw new ApiError(409, 'CUBE_NOT_PLAYABLE');
+    return { shape: { phases: phases.length, rows, columns }, cubeVersionId: latest.id };
+  }
+
   /** Ocultar no borra: la run sigue guardada y se puede volver a mostrar. */
   async setRunHidden(actor: AuthActor, cubeId: string, runId: string, hidden: boolean): Promise<CubeResponse> {
     requireCapability(actor, 'cubes.manage.own');

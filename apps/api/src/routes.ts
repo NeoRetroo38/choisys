@@ -15,7 +15,7 @@ export function productRoutes(sessions: SessionService, auth: AuthService | null
   };
   routes.post('/sessions', async (req, res) => {
     const profileId = await owner(req.get('authorization'));
-    res.status(201).json(sessions.start(startSessionInput(req.body), profileId));
+    res.status(201).json(await sessions.start(startSessionInput(req.body), profileId));
   });
   routes.post('/evaluate', async (req, res) => {
     const profileId = await owner(req.get('authorization'));
