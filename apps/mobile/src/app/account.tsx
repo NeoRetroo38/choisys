@@ -88,6 +88,10 @@ export default function Account() {
           detail={`último ${new Date(runs[0].startedAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}`} />}
       </Section>}
 
+      {model.cubes && <Section label="cubos">
+        <ActionRow label="Mis cubos" value="→" detail="Crea cubos con tus fases, filas y columnas" onPress={() => router.push('/cubes')} />
+      </Section>}
+
       {(model.account.export || model.system.visible) && <Section label="datos">
         {model.account.export && <ActionRow label="Exportar mis datos" detail="Perfil y Runs en un archivo .json"
           busy={busy === 'export'} onPress={() => void exportData()} />}

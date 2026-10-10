@@ -1,5 +1,6 @@
 import type {
   AdminProfileResponse, AdminProfileRow, AdminProfilesResponse, DeleteMeResponse, ExportResponse, Measurement, MeProfile, MeResponse, Role,
+  CreateCubeRequest, CubeDetail, CubePhaseDefinition, CubeRun, CubeSummary,
   RoleChangeRow, RoleChangesResponse, RunHistoryResponse, RunSummary, RequestedRole, RoleRequestStatus, RoleRequestSummary, AdminRoleRequestRow,
 } from '@scenarys/shared';
 import { ApiRequestError, apiRequest, type ApiTransport } from '../api/request';
@@ -81,6 +82,43 @@ function readAdminProfile(item: unknown): AdminProfileRow {
   return { ...profile, disabled: item.disabled, runCount: item.runCount as number };
 }
 
+const isCount = (value: unknown, min: number, max: number): value is number => Number.isInteger(value) && (value as number) >= min && (value as number) <= max;
+const isLabels = (value: unknown): value is string[] => Array.isArray(value) && value.length >= 1 && value.length <= 10 && value.every(item => isText(item, 60));
+
+function readCubeSummary(value: unknown): CubeSummary {
+  if (!record(value) || !isText(value.cubeId) || !isText(value.name, 120) || !isCount(value.version, 1, 100_000) ||
+      !isCount(value.phases, 0, 10) || !isCount(value.runs, 0, 1_000_000) || !isDate(value.createdAt)) throw invalid();
+  return { cubeId: value.cubeId, name: value.name, version: value.version, phases: value.phases, runs: value.runs, createdAt: value.createdAt };
+}
+
+function readPhases(value: unknown): CubePhaseDefinition[] {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 10) throw invalid();
+  return value.map(item => {
+    if (!record(item) || !isText(item.label, 60) || !isLabels(item.rows) || !isLabels(item.columns)) throw invalid();
+    return { label: item.label, rows: [...item.rows], columns: [...item.columns] };
+  });
+}
+
+/** Mediciones de un cubo propio: fase, fila y columna dentro de 1–10 (la forma la valida el servidor). */
+function readCubeRun(value: unknown): CubeRun {
+  if (!record(value) || !isText(value.runId) || !isDate(value.startedAt) || (value.status !== 'COMPLETED' && value.status !== 'ABANDONED') ||
+      typeof value.hidden !== 'boolean' || !isCount(value.version, 1, 100_000) || !Array.isArray(value.measurements)) throw invalid();
+  const measurements = value.measurements.map(item => {
+    if (!record(item) || !isCount(item.phase, 1, 10) || !isCount(item.row, 1, 10) || !isCount(item.column, 1, 10)) throw invalid();
+    return { phase: item.phase, row: item.row, column: item.column } as unknown as Measurement;
+  });
+  return { runId: value.runId, startedAt: value.startedAt, status: value.status, measurements, hidden: value.hidden, version: value.version };
+}
+
+function readCubeResponse(value: unknown): CubeDetail {
+  if (!record(value) || value.ok !== true || !record(value.cube)) throw invalid();
+  const cube = value.cube;
+  if (!isText(cube.cubeId) || !isText(cube.name, 120) || !isCount(cube.version, 1, 100_000) || !isText(cube.versionId) ||
+      !isDate(cube.createdAt) || !Array.isArray(cube.runs)) throw invalid();
+  return { cubeId: cube.cubeId, name: cube.name, version: cube.version, versionId: cube.versionId, createdAt: cube.createdAt,
+    phases: readPhases(cube.phases), runs: cube.runs.map(readCubeRun) };
+}
+
 /** Own-account and SUPERDEV endpoints (docs/ROLES.md). The server decides; this client reads and validates. */
 export const adminPaths = { profiles: '/admin/profiles', roleChanges: '/admin/role-changes', roleRequests: '/admin/role-requests' } as const;
 
@@ -117,6 +155,17 @@ export function createAccountApi(baseUrl: string | undefined, getToken: () => st
       const data = await call('/me/delete', { password });
       if (!record(data) || data.ok !== true) throw invalid();
       return { ok: true };
+    },
+    async cubes(): Promise<CubeSummary[]> {
+      const data = await call('/cubes', undefined, 1_000_000);
+      if (!record(data) || data.ok !== true || !Array.isArray(data.cubes)) throw invalid();
+      return data.cubes.map(readCubeSummary);
+    },
+    async createCube(input: CreateCubeRequest): Promise<CubeDetail> { return readCubeResponse(await call('/cubes', input, 1_000_000)); },
+    async cube(cubeId: string): Promise<CubeDetail> { return readCubeResponse(await call(`/cubes/${encodeURIComponent(cubeId)}`, undefined, 1_000_000)); },
+    /** Ocultar no borra: el servidor guarda la run y la puede volver a mostrar. */
+    async setRunHidden(cubeId: string, runId: string, hidden: boolean): Promise<CubeDetail> {
+      return readCubeResponse(await call(`/cubes/${encodeURIComponent(cubeId)}/runs/${encodeURIComponent(runId)}/visibility`, { hidden }, 1_000_000));
     },
     async health(): Promise<{ service: string; version: string; latencyMs: number }> {
       const started = Date.now();
