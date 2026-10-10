@@ -322,3 +322,31 @@ test('connection registry marks idle clients inactive and forgets old ones', () 
   assert.equal(registry.list().length, 0);
   assert.equal(deviceLabel('Mozilla/5.0 (Windows NT 10.0) Chrome/120 Safari/537'), 'Windows · Chrome');
 });
+
+test('system status for the operator map: only SUPERDEV, numbers and booleans only, no credentials', async () => {
+  const { SystemService } = await import('../src/services/systemService.js');
+  const w = world();
+  const registry = new ConnectionRegistry();
+  const db = { ...w.db, $transaction: async (queries: unknown[]) => queries } as unknown as PrismaClient;
+  (db as unknown as { profile: { count: () => number }; cubeData: { count: () => number }; roleChange: { count: () => number } }).profile = { count: () => 7 } as never;
+  (db as unknown as { cubeData: { count: () => number } }).cubeData = { count: () => 3 } as never;
+  (db as unknown as { roleChange: { count: () => number } }).roleChange = { count: () => 2 } as never;
+  const system = new SystemService(db, async () => ({ ok: true, latencyMs: 4, version: '0.1.0' }), registry);
+  const config = readConfig({ CHOISYS_LOCAL_API_TOKEN: 'x'.repeat(40) });
+  const server = createApp(config, undefined, { auth: new AuthService(w.repository, undefined, seen => registry.observe(seen)), system }).listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const get = (as: { token: string } | null) => fetch(base + '/admin/system', { headers: as ? { Authorization: `Bearer ${as.token}` } : {} });
+  try {
+    assert.equal((await get(null)).status, 401);
+    for (const role of ['USER', 'ADMIN', 'DEV', 'SUPERADMIN'] as Role[]) assert.equal((await get(by(role))).status, 403, role);
+    const res = await get(by('SUPERDEV'));
+    assert.equal(res.status, 200);
+    const body = await res.json() as Record<string, any>;
+    assert.equal(body.engine.ok, true);
+    assert.deepEqual(body.database.counts, { profiles: 7, runs: 3, roleChanges: 2 });
+    assert.equal(body.connections.total, 5); // every authenticated caller is counted, including the four denied roles
+    assert.deepEqual(Object.keys(body).sort(), ['api', 'checkedAt', 'connections', 'database', 'engine', 'ok']);
+    assert.equal(JSON.stringify(body).includes(by('SUPERDEV').token), false);
+  } finally { server.close(); }
+});

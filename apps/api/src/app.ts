@@ -12,6 +12,8 @@ import type { MeService } from './services/meService.js';
 import { meRoutes } from './meRoutes.js';
 import type { AdminService } from './services/adminService.js';
 import { adminRoutes } from './adminRoutes.js';
+import type { SystemService } from './services/systemService.js';
+import { systemRoutes } from './systemRoutes.js';
 import { requestContext, type ConnectionRegistry } from './connections.js';
 import { connectionRoutes } from './connectionRoutes.js';
 import { RateLimiter as MeLimiter } from './rateLimit.js';
@@ -33,6 +35,8 @@ export interface AppDependencies {
   connections?: ConnectionRegistry;
   /** Explicit opt-in after the role-request schema is ready; absent means routes are not mounted. */
   roleRequests?: RoleRequestService;
+  /** Operator health snapshot (/admin/system). */
+  system?: SystemService;
 }
 export function createApp(config: ApiConfig, cube: CubeClient = new NeoCubeClient(config.token, config.timeoutMs), dependencies: AppDependencies = {}) {
   const app = express();
@@ -67,6 +71,7 @@ export function createApp(config: ApiConfig, cube: CubeClient = new NeoCubeClien
   app.use(productRoutes(new SessionService(cube, undefined, dependencies.runRecorder), dependencies.auth ?? null, dependencies.allowUnauthenticatedProduct === true, dependencies.productLimiter));
   if (dependencies.me) app.use(meRoutes(dependencies.auth ?? null, dependencies.me, dependencies.productLimiter ?? new MeLimiter()));
   if (dependencies.connections) app.use(connectionRoutes(dependencies.auth ?? null, dependencies.connections, dependencies.productLimiter ?? new MeLimiter()));
+  if (dependencies.system) app.use(systemRoutes(dependencies.auth ?? null, dependencies.system, dependencies.productLimiter ?? new MeLimiter()));
   if (dependencies.admin) app.use(adminRoutes(dependencies.auth ?? null, dependencies.admin, dependencies.productLimiter ?? new MeLimiter()));
   if (dependencies.roleRequests) app.use(roleRequestRoutes(dependencies.auth ?? null, dependencies.roleRequests,
     dependencies.productLimiter ?? new MeLimiter(), !dependencies.me));

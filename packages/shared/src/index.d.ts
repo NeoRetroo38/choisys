@@ -93,6 +93,15 @@ export interface ConnectionRow {
   id: string; profileId: string; displayName: string; role: Role;
   device: string; address: string; since: string; lastSeen: string; requests: number; active: boolean;
 }
+/** Operator health snapshot (SUPERDEV, GET /admin/system): numbers and booleans only. */
+export interface SystemStatusResponse {
+  ok: true;
+  checkedAt: string;
+  api: { version: string; uptimeSeconds: number };
+  engine: { ok: boolean; latencyMs: number | null; version: string | null };
+  database: { configured: boolean; ok: boolean; latencyMs: number | null; counts: { profiles: number; runs: number; roleChanges: number } | null };
+  connections: { active: number; total: number };
+}
 export interface ConnectionsResponse { ok: true; connections: ConnectionRow[] }
 export interface AssignRoleRequest { role: Role; reason?: string }
 export interface DisableProfileRequest { disabled: boolean }
