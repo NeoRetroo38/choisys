@@ -32,6 +32,8 @@ Fuente única de capacidades: `apps/api/src/permissions.ts`. Ayudantes: `hasCapa
 | `POST /admin/profiles/:id/role {role, reason?}` | `role.assign` | sudev, solo a roles por debajo del suyo |
 | `POST /admin/profiles/:id/disable {disabled}` | `account.disable` | sudev, solo sobre roles por debajo |
 | `GET /admin/role-changes` | `role_changes.read` | sudev |
+| `GET /admin/connections` | `system.manage` | sudev: quién está conectado (usuario, dispositivo, IP, actividad) |
+| `GET /admin/system` | `system.manage` | sudev: salud del motor C++, de la base de datos (con recuentos) y de la API, para el mapa en vivo de Daemon |
 | `GET /admin/role-requests?status=PENDING` | `role_requests.read` | sudev, feature activa |
 | `POST /admin/role-requests/:id/decision {approve, reason?}` | `role.assign` | sudev, feature activa; objetivo inferior |
 
