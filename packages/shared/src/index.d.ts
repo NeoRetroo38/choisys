@@ -108,3 +108,12 @@ export interface DisableProfileRequest { disabled: boolean }
 export interface AdminProfileResponse { ok: true; profile: AdminProfileRow }
 export interface RoleChangeRow { id: string; at: string; actorId: string | null; targetId: string | null; from: Role | null; to: Role; reason: string | null }
 export interface RoleChangesResponse { ok: true; changes: RoleChangeRow[] }
+
+/** Cubos de usuario (choisys#84). Semántica `var:string` por fase, fila y columna; 1–10 de cada. */
+export interface CubePhaseDefinition { label: string; rows: string[]; columns: string[] }
+export interface CreateCubeRequest { name: string; phases: CubePhaseDefinition[] }
+export interface CubeSummary { cubeId: string; name: string; version: number; phases: number; runs: number; createdAt: string }
+export interface CubeRun extends RunSummary { hidden: boolean; version: number }
+export interface CubeDetail { cubeId: string; name: string; version: number; versionId: string; phases: CubePhaseDefinition[]; createdAt: string; runs: CubeRun[] }
+export interface CubeListResponse { ok: true; cubes: CubeSummary[] }
+export interface CubeResponse { ok: true; cube: CubeDetail }

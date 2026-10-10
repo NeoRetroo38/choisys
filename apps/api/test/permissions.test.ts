@@ -22,7 +22,8 @@ test('permission keys are stable identifiers that fit the database column', () =
 });
 
 test('USER holds only its own-data capabilities and every higher role includes them', () => {
-  assert.deepEqual([...roleGrants.USER].sort(), keys.filter(key => key.endsWith('.own')).sort());
+  // USER: todo lo propio salvo cubos, que empiezan en ADMIN (choisys#84).
+  assert.deepEqual([...roleGrants.USER].sort(), keys.filter(key => key.endsWith('.own') && key !== 'cubes.manage.own').sort());
   for (const role of roles) for (const key of roleGrants.USER) assert.equal(roleHasPermission(role, key), true);
 });
 
@@ -33,5 +34,7 @@ test('SUPERDEV alone can operate the system; reserved roles gain nothing beyond 
     assert.equal(roleHasPermission('SUPERDEV', key), true, `SUPERDEV lacks ${key}`);
     for (const role of ['USER', 'ADMIN', 'DEV', 'SUPERADMIN'] as Role[]) assert.equal(roleHasPermission(role, key), false, `${role} must not hold ${key}`);
   }
+  for (const role of ['ADMIN', 'DEV', 'SUPERADMIN', 'SUPERDEV'] as Role[]) assert.equal(roleHasPermission(role, 'cubes.manage.own'), true, `${role} manages own cubes`);
+  assert.equal(roleHasPermission('USER', 'cubes.manage.own'), false);
   assert.equal([...roleGrants.SUPERDEV].length, keys.length);
 });

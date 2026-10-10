@@ -204,7 +204,7 @@ test('serialized duplicate role changes have one success and one audit in offlin
   assert.equal(w.changes.length, 1); assert.equal(w.get(second.id)!.role, 'DEV');
 });
 
-test('capabilities per role come from the single catalogue, and ADMIN/DEV/SUPERADMIN hold exactly USER\'s', async () => {
+test('capabilities per role come from the single catalogue, and ADMIN/DEV/SUPERADMIN hold USER\'s plus their own cubes', async () => {
   const s = await serve();
   try {
     for (const p of people) {
@@ -216,7 +216,7 @@ test('capabilities per role come from the single catalogue, and ADMIN/DEV/SUPERA
       assert.ok(body.capabilities.every((c: string) => c in permissions));
       assert.equal(JSON.stringify(body).includes('passwordHash') || JSON.stringify(body).includes('tokenHash'), false);
     }
-    assert.deepEqual(roleGrants.ADMIN, roleGrants.USER);
+    assert.deepEqual(roleGrants.ADMIN, [...roleGrants.USER, 'cubes.manage.own']);
     assert.ok(by('SUPERDEV') && roleGrants.SUPERDEV.includes('role.assign' as PermissionKey));
   } finally { s.close(); }
 });

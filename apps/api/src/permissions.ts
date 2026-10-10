@@ -12,6 +12,8 @@ export const permissions = {
   'cube_data.create.own': 'Create own runs and sessions',
   'cube_data.export.own': 'Export own data',
   'account.delete.own': 'Delete own account and its data',
+  // ADMIN and above: their own cubes (choisys#84).
+  'cubes.manage.own': 'Create own cubes and choose which of their runs are visible',
   // SUPERDEV: operate the whole system.
   'profile.read.any': 'Read any profile',
   'account.disable': 'Disable or re-enable any account',
@@ -35,13 +37,15 @@ const superdevExtras: readonly PermissionKey[] = [
   'cube_data.read.any', 'cube_data.read.technical', 'system.manage',
 ];
 
-/** ADMIN, DEV and SUPERADMIN are reserved: for now they hold exactly what USER holds. */
+const cubeCreators: readonly PermissionKey[] = [...userGrants, 'cubes.manage.own'];
+
+/** ADMIN, DEV and SUPERADMIN hold what USER holds plus their own cubes. */
 export const roleGrants: Record<Role, readonly PermissionKey[]> = {
   USER: userGrants,
-  ADMIN: userGrants,
-  DEV: userGrants,
-  SUPERADMIN: userGrants,
-  SUPERDEV: [...userGrants, ...superdevExtras],
+  ADMIN: cubeCreators,
+  DEV: cubeCreators,
+  SUPERADMIN: cubeCreators,
+  SUPERDEV: [...cubeCreators, ...superdevExtras],
 };
 
 export function roleHasPermission(role: Role, key: PermissionKey): boolean {

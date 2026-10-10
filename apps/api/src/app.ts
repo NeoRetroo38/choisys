@@ -19,6 +19,8 @@ import { connectionRoutes } from './connectionRoutes.js';
 import { RateLimiter as MeLimiter } from './rateLimit.js';
 import type { RoleRequestService } from './services/roleRequestService.js';
 import { roleRequestRoutes } from './roleRequestRoutes.js';
+import { cubeRoutes } from './cubeRoutes.js';
+import type { CubeService } from './services/cubeService.js';
 export interface AppDependencies {
   auth?: AuthService | null;
   /** Test harness only. Runtime bootstrap always requires account authentication. */
@@ -29,6 +31,8 @@ export interface AppDependencies {
   runRecorder?: RunRecorder;
   /** Own-account endpoints (/me); absent without a database. */
   me?: MeService;
+  /** Own cubes for ADMIN and above (/cubes); absent without a database. */
+  cubes?: CubeService;
   /** Operator endpoints (/admin); absent without a database. */
   admin?: AdminService;
   /** Live list of connected clients (/admin/connections, /live). */
@@ -72,6 +76,7 @@ export function createApp(config: ApiConfig, cube: CubeClient = new NeoCubeClien
   if (dependencies.me) app.use(meRoutes(dependencies.auth ?? null, dependencies.me, dependencies.productLimiter ?? new MeLimiter()));
   if (dependencies.connections) app.use(connectionRoutes(dependencies.auth ?? null, dependencies.connections, dependencies.productLimiter ?? new MeLimiter()));
   if (dependencies.system) app.use(systemRoutes(dependencies.auth ?? null, dependencies.system, dependencies.productLimiter ?? new MeLimiter()));
+  if (dependencies.cubes) app.use(cubeRoutes(dependencies.auth ?? null, dependencies.cubes, dependencies.productLimiter ?? new MeLimiter()));
   if (dependencies.admin) app.use(adminRoutes(dependencies.auth ?? null, dependencies.admin, dependencies.productLimiter ?? new MeLimiter()));
   if (dependencies.roleRequests) app.use(roleRequestRoutes(dependencies.auth ?? null, dependencies.roleRequests,
     dependencies.productLimiter ?? new MeLimiter(), !dependencies.me));
