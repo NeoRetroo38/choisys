@@ -17,12 +17,17 @@ interface ExperienceScreenProps {
   /** Present when the API exposes the person's account; replaces the bare sign-out link. */
   onAccount?: () => void;
   onUnauthorized: () => void;
+  /** Un cubo propio: misma interfaz que el vanilla, con su número de fases y su cuadrícula. */
+  cubeId?: string;
 }
 
-const positions: Position[][] = [[1, 2, 3], [4, 5, 6], [7, 8, 9]];
-const phaseTitles = { 1: '1. fase one.', 2: '2. fase two.', 3: '3. fase three.' };
+const phaseWords = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
+const phaseTitle = (phase: number) => `${phase}. fase ${phaseWords[phase - 1] ?? phase}.`;
+/** Posiciones 1-based por filas, como el vanilla (1 2 3 / 4 5 6 / 7 8 9). */
+const gridPositions = (rows: number, columns: number): Position[][] =>
+  Array.from({ length: rows }, (_, row) => Array.from({ length: columns }, (__, column) => row * columns + column + 1));
 
-export default function ExperienceScreen({ client, onSignOut, onAccount, onUnauthorized }: ExperienceScreenProps) {
+export default function ExperienceScreen({ client, onSignOut, onAccount, onUnauthorized, cubeId }: ExperienceScreenProps) {
   const [state, dispatch] = useReducer(sessionReducer, initialState);
   const inFlight = useRef(false);
   const [history, setHistory] = useState<RunMeasurements[]>([]);
@@ -30,8 +35,12 @@ export default function ExperienceScreen({ client, onSignOut, onAccount, onUnaut
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const canvasWidth = Math.min(width, 560);
-  const circleSize = Math.max(44, canvasWidth * 0.158);
-  const circleGap = canvasWidth * 0.081;
+  const { phases, rows, columns } = state.shape;
+  // Misma medida que el vanilla con 3 columnas; con más columnas, los círculos encogen para caber.
+  const cell = Math.min(canvasWidth * 0.239, (canvasWidth * 0.84) / columns);
+  const circleSize = Math.max(columns > 3 ? 22 : 44, cell * 0.661);
+  const circleGap = cell - circleSize;
+  const positions = gridPositions(rows, columns);
 
   useEffect(() => {
     historyStorage.getItem().then(raw => setHistory(parseHistory(raw)), () => undefined);
@@ -58,7 +67,7 @@ export default function ExperienceScreen({ client, onSignOut, onAccount, onUnaut
     inFlight.current = true;
     dispatch({ type: 'starting' });
     try {
-      const response = await client.startSession();
+      const response = await client.startSession(cubeId);
       dispatch({ type: 'started', session: response.session });
     } catch (error) {
       fail(error);
@@ -72,8 +81,9 @@ export default function ExperienceScreen({ client, onSignOut, onAccount, onUnaut
     inFlight.current = true;
     dispatch({ type: 'sending', request });
     try {
-      const response = await client.evaluate(request);
-      if (response.result.measurements) remember(response.result.measurements);
+      const response = await client.evaluate(request, state.shape);
+      // «Ver mi cubo» es el cubo vanilla; las runs de un cubo propio se ven en su ficha.
+      if (!cubeId && response.result.measurements) remember(response.result.measurements as RunMeasurements);
       // Let the pop finish before the next phase fades in.
       await new Promise(resolve => setTimeout(resolve, 260));
       playSound(response.result.status === 'completed' ? 'complete' : 'phase');
@@ -91,7 +101,7 @@ export default function ExperienceScreen({ client, onSignOut, onAccount, onUnaut
     playSound('tap');
     dispatch({ type: 'selected', position });
     void send({
-      scenarioId: 'choice-grid', sessionId: state.sessionId, phase: state.phase,
+      scenarioId: cubeId ? 'custom' : 'choice-grid', sessionId: state.sessionId, phase: state.phase,
       decisions: [{ position, selected: true, value: 1 }],
     });
   }
@@ -110,7 +120,7 @@ export default function ExperienceScreen({ client, onSignOut, onAccount, onUnaut
     );
   }
 
-  const viewCube = history.length > 0 && <Pressable accessibilityRole="button" onPress={() => { playSound('cube'); setShowCube(true); }}
+  const viewCube = !cubeId && history.length > 0 && <Pressable accessibilityRole="button" onPress={() => { playSound('cube'); setShowCube(true); }}
     style={({ pressed }) => [styles.back, pressed && styles.pressed]}>
     <Text style={styles.secondaryText}>Ver mi cubo</Text>
   </Pressable>;
@@ -124,7 +134,7 @@ export default function ExperienceScreen({ client, onSignOut, onAccount, onUnaut
       }]}>
         {state.screen === 'home' && <FadeIn key="home" style={[styles.home, { minHeight: Math.max(440, height - insets.top - insets.bottom - 82) }]}>
           <Text style={[styles.brand, { fontSize: canvasWidth * 0.092 }]}>choisys</Text>
-          <Pressable accessibilityRole="button" accessibilityLabel="Comenzar las tres fases"
+          <Pressable accessibilityRole="button" accessibilityLabel={cubeId ? 'Comenzar las fases del cubo' : 'Comenzar las tres fases'}
             accessibilityHint="Elige un círculo en cada fase."
             accessibilityState={{ disabled: state.busy, busy: state.busy }} disabled={state.busy}
             onPress={start} style={({ pressed }) => [styles.start, {
@@ -141,14 +151,14 @@ export default function ExperienceScreen({ client, onSignOut, onAccount, onUnaut
 
         {state.screen === 'phase' && <FadeIn key={`phase-${state.phase}`} style={[styles.phase, { paddingTop: Math.max(38, height * 0.16 - insets.top) }]}>
           <Text key={state.phase} accessibilityRole="header" accessibilityLiveRegion="polite"
-            accessibilityLabel={`Fase ${state.phase} de 3. Elige un círculo.`}
+            accessibilityLabel={`Fase ${state.phase} de ${phases}. Elige un círculo.`}
             style={[styles.phaseTitle, { fontSize: canvasWidth * 0.091, marginLeft: canvasWidth * 0.139 }]}>
-            {phaseTitles[state.phase]}
+            {phaseTitle(state.phase)}
           </Text>
           <View key={`grid-${state.phase}`} style={[styles.grid, { marginTop: canvasWidth * 0.232, gap: circleGap }]}>
             {positions.map((row, rowIndex) => <View key={rowIndex} style={[styles.gridRow, { gap: circleGap }]}>
               {row.map((position, columnIndex) => <PopCircle key={position} size={circleSize}
-                delay={(rowIndex * 3 + columnIndex) * 45}
+                delay={(rowIndex * columns + columnIndex) * 45}
                 label={`Círculo ${position}, fila ${rowIndex + 1}, columna ${columnIndex + 1}`}
                 selected={state.selected === position}
                 disabled={state.busy || state.pending !== null || !!state.error?.restart}
@@ -178,9 +188,9 @@ export default function ExperienceScreen({ client, onSignOut, onAccount, onUnaut
         {state.screen === 'result' && <FadeIn key="result" style={[styles.result, { minHeight: Math.max(440, height - insets.top - insets.bottom - 82) }]}>
           <Text style={styles.resultBrand}>choisys</Text>
           <View accessible={false} style={styles.completedDots}>
-            {[1, 2, 3].map((dot) => <View key={dot} style={styles.completedDot} />)}
+            {Array.from({ length: phases }, (_, dot) => <View key={dot} style={styles.completedDot} />)}
           </View>
-          <Text accessibilityRole="header" accessibilityLiveRegion="polite" style={styles.resultTitle}>3 fases completadas.</Text>
+          <Text accessibilityRole="header" accessibilityLiveRegion="polite" style={styles.resultTitle}>{phases} {phases === 1 ? 'fase completada' : 'fases completadas'}.</Text>
           <Text style={styles.resultCopy}>Cada elección cuenta.</Text>
           <Pressable accessibilityRole="button" onPress={start} disabled={state.busy}
             style={({ pressed }) => [styles.confirm, styles.newRun, state.busy && styles.disabled, pressed && styles.pressed]}>
@@ -230,7 +240,7 @@ const styles = StyleSheet.create({
   hint: { color: '#707070', fontSize: 12, lineHeight: 18, marginTop: 12, textAlign: 'center' },
   result: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
   resultBrand: { fontSize: 26, fontWeight: '400', letterSpacing: -0.7, color: '#000000' },
-  completedDots: { flexDirection: 'row', gap: 15, marginTop: 60, marginBottom: 38 },
+  completedDots: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 15, marginTop: 60, marginBottom: 38 },
   completedDot: { width: 14, height: 14, borderRadius: 99, backgroundColor: '#000000' },
   resultTitle: { fontSize: 28, fontWeight: '400', letterSpacing: -0.7, textAlign: 'center', color: '#000000' },
   resultCopy: { color: '#707070', fontSize: 15, lineHeight: 22, marginTop: 14, textAlign: 'center' },

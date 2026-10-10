@@ -1,10 +1,12 @@
-import type { EvaluateRequest, EvaluateResponse, Measurement, Phase, PhaseTransitionTiming, Position, StartSessionResponse } from '@scenarys/shared';
+import type { CubeShape, EvaluateRequest, EvaluateResponse, Measurement, Phase, PhaseTransitionTiming, Position, StartSessionResponse } from '@scenarys/shared';
 import type { UiError } from './productApi';
 
 export interface SessionState {
   screen: 'home' | 'phase' | 'result';
   sessionId: string | null;
   phase: Phase;
+  /** Forma del cubo en juego: la del vanilla hasta que el servidor diga otra al empezar. */
+  shape: CubeShape;
   selected: Position | null;
   pending: EvaluateRequest | null;
   busy: boolean;
@@ -17,7 +19,7 @@ export interface SessionState {
 }
 
 export const initialState: SessionState = {
-  screen: 'home', sessionId: null, phase: 1, selected: null, pending: null, busy: false, error: null, notice: null, measurements: null, phaseTransitions: [],
+  screen: 'home', sessionId: null, phase: 1, shape: { phases: 3, rows: 3, columns: 3 }, selected: null, pending: null, busy: false, error: null, notice: null, measurements: null, phaseTransitions: [],
 };
 
 type Action =
@@ -32,7 +34,7 @@ type Action =
 export function sessionReducer(state: SessionState, action: Action): SessionState {
   switch (action.type) {
     case 'starting': return { ...initialState, busy: true };
-    case 'started': return { ...initialState, screen: 'phase', sessionId: action.session.sessionId, phase: action.session.phase };
+    case 'started': return { ...initialState, screen: 'phase', sessionId: action.session.sessionId, phase: action.session.phase, shape: action.session.shape };
     case 'selected': return state.busy || state.pending || state.error?.restart ? state : { ...state, selected: state.selected === action.position ? null : action.position, error: null };
     case 'sending': return { ...state, busy: true, pending: action.request, error: null, notice: null };
     case 'received': return {
@@ -43,6 +45,6 @@ export function sessionReducer(state: SessionState, action: Action): SessionStat
       phaseTransitions: action.result.phaseTransitions ?? state.phaseTransitions,
     };
     case 'failed': return { ...state, busy: false, error: action.error };
-    case 'reset': return state.busy ? state : initialState;
+    case 'reset': return state.busy ? state : { ...initialState, shape: state.shape };
   }
 }

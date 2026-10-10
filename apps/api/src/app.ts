@@ -72,7 +72,8 @@ export function createApp(config: ApiConfig, cube: CubeClient = new NeoCubeClien
   });
   app.use(express.json({ limit: '8kb', strict: true, inflate: false }));
   app.use(authRoutes(dependencies.auth ?? null));
-  app.use(productRoutes(new SessionService(cube, undefined, dependencies.runRecorder), dependencies.auth ?? null, dependencies.allowUnauthenticatedProduct === true, dependencies.productLimiter));
+  const shapes = dependencies.cubes ? dependencies.cubes.playable.bind(dependencies.cubes) : undefined;
+  app.use(productRoutes(new SessionService(cube, undefined, dependencies.runRecorder, shapes), dependencies.auth ?? null, dependencies.allowUnauthenticatedProduct === true, dependencies.productLimiter));
   if (dependencies.me) app.use(meRoutes(dependencies.auth ?? null, dependencies.me, dependencies.productLimiter ?? new MeLimiter()));
   if (dependencies.connections) app.use(connectionRoutes(dependencies.auth ?? null, dependencies.connections, dependencies.productLimiter ?? new MeLimiter()));
   if (dependencies.system) app.use(systemRoutes(dependencies.auth ?? null, dependencies.system, dependencies.productLimiter ?? new MeLimiter()));

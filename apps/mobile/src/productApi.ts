@@ -1,4 +1,6 @@
-import type { EvaluateRequest, EvaluateResponse, Measurement, PhaseTransitionTiming, StartSessionResponse } from '@scenarys/shared';
+import type { CubeShape, EvaluateRequest, EvaluateResponse, Measurement, PhaseTransitionTiming, StartSessionResponse } from '@scenarys/shared';
+
+export const VANILLA_SHAPE: CubeShape = { phases: 3, rows: 3, columns: 3 };
 
 export interface UiError { message: string; restart: boolean }
 
@@ -15,6 +17,9 @@ export function toUiError(error: unknown): UiError {
   switch (code) {
     case 'CONFIGURATION_ERROR':
       return { message: 'Falta configurar la conexión con choisys. Define EXPO_PUBLIC_API_URL con la dirección del API de producto y vuelve a cargar la app.', restart: false };
+    case 'NOT_FOUND':
+    case 'CUBE_NOT_PLAYABLE':
+      return { message: 'Este cubo no está disponible para jugar.', restart: true };
     case 'SESSION_NOT_FOUND':
     case 'SESSION_CONFLICT':
       return { message: 'Esta sesión ya no está disponible. Vuelve al inicio para comenzar una nueva.', restart: true };
@@ -41,15 +46,15 @@ function keys(value: Record<string, unknown>, expected: string[]): boolean {
 }
 
 /** Structural check only; coordinates are drawn exactly as received. */
-function readMeasurements(value: unknown): Measurement[] {
-  if (!Array.isArray(value) || value.length !== 3) throw new ProductApiError('INVALID_RESPONSE');
+function readMeasurements(value: unknown, shape: CubeShape): Measurement[] {
+  if (!Array.isArray(value) || value.length !== shape.phases) throw new ProductApiError('INVALID_RESPONSE');
   return value.map((item, index) => {
     if (!record(item) || !keys(item, ['phase', 'row', 'column']) || item.phase !== index + 1
       || !Number.isInteger(item.row) || !Number.isInteger(item.column)
-      || (item.row as number) < 1 || (item.row as number) > 3 || (item.column as number) < 1 || (item.column as number) > 3) {
+      || (item.row as number) < 1 || (item.row as number) > shape.rows || (item.column as number) < 1 || (item.column as number) > shape.columns) {
       throw new ProductApiError('INVALID_RESPONSE');
     }
-    return { phase: item.phase as Measurement['phase'], row: item.row as Measurement['row'], column: item.column as Measurement['column'] };
+    return { phase: item.phase as number, row: item.row as number, column: item.column as number };
   });
 }
 
@@ -60,7 +65,7 @@ function readPhaseTransitions(value: unknown, phase: EvaluateRequest['phase']): 
     if (!record(item) || !keys(item, ['fromPhase', 'toPhase', 'durationMs'])
       || item.fromPhase !== index + 1 || item.toPhase !== index + 2
       || !Number.isSafeInteger(item.durationMs) || (item.durationMs as number) < 0) throw new ProductApiError('INVALID_RESPONSE');
-    return { fromPhase: item.fromPhase as 1 | 2, toPhase: item.toPhase as 2 | 3, durationMs: item.durationMs as number };
+    return { fromPhase: item.fromPhase as number, toPhase: item.toPhase as number, durationMs: item.durationMs as number };
   });
 }
 
@@ -106,27 +111,35 @@ export function createProductClient(baseUrl: string | undefined, transport: type
   }
 
   return {
-    async startSession(): Promise<StartSessionResponse> {
-      const body = await post('/sessions', { scenarioId: 'choice-grid' });
+    /** Sin cubeId, el cubo vanilla; con cubeId, un cubo propio con la forma que diga el servidor. */
+    async startSession(cubeId?: string): Promise<StartSessionResponse> {
+      const scenarioId = cubeId ? 'custom' : 'choice-grid';
+      const body = await post('/sessions', cubeId ? { scenarioId, cubeId } : { scenarioId });
       if (!record(body) || !keys(body, ['ok', 'session']) || body.ok !== true || !record(body.session)) throw new ProductApiError('INVALID_RESPONSE');
       const session = body.session;
-      if (!keys(session, ['sessionId', 'scenarioId', 'phase']) || typeof session.sessionId !== 'string' || !sessionIdPattern.test(session.sessionId) || session.scenarioId !== 'choice-grid' || session.phase !== 1) throw new ProductApiError('INVALID_RESPONSE');
-      return { ok: true, session: { sessionId: session.sessionId, scenarioId: 'choice-grid', phase: 1 } };
+      const size = (value: unknown) => Number.isInteger(value) && (value as number) >= 1 && (value as number) <= 10;
+      // Una API anterior no devuelve la forma: para el vanilla se sobreentiende 3×(3×3), así la web nueva no rompe con la API vieja.
+      const shape = session.shape ?? (cubeId ? undefined : VANILLA_SHAPE);
+      if (!keys(session, session.shape === undefined ? ['sessionId', 'scenarioId', 'phase'] : ['sessionId', 'scenarioId', 'phase', 'shape']) ||
+        typeof session.sessionId !== 'string' || !sessionIdPattern.test(session.sessionId) ||
+        session.scenarioId !== scenarioId || session.phase !== 1 || !record(shape) || !keys(shape, ['phases', 'rows', 'columns']) ||
+        !size(shape.phases) || !size(shape.rows) || !size(shape.columns)) throw new ProductApiError('INVALID_RESPONSE');
+      return { ok: true, session: { sessionId: session.sessionId, scenarioId, phase: 1,
+        shape: { phases: shape.phases as number, rows: shape.rows as number, columns: shape.columns as number } } };
     },
-    async evaluate(request: EvaluateRequest): Promise<EvaluateResponse> {
+    async evaluate(request: EvaluateRequest, shape: CubeShape = VANILLA_SHAPE): Promise<EvaluateResponse> {
       const body = await post('/evaluate', request);
       if (!record(body) || !keys(body, ['ok', 'result']) || body.ok !== true || !record(body.result)) throw new ProductApiError('INVALID_RESPONSE');
       const result = body.result;
-      const last = request.phase === 3;
+      const last = request.phase === shape.phases;
       if (!keys(result, last ? ['sessionId', 'phase', 'status', 'nextPhase', 'phaseTransitions', 'measurements'] : ['sessionId', 'phase', 'status', 'nextPhase', 'phaseTransitions'])
         || result.sessionId !== request.sessionId || result.phase !== request.phase) throw new ProductApiError('INVALID_RESPONSE');
-      const valid = request.phase === 1 ? result.status === 'phase-complete' && result.nextPhase === 2
-        : request.phase === 2 ? result.status === 'phase-complete' && result.nextPhase === 3
-          : result.status === 'completed' && result.nextPhase === null;
+      const valid = last ? result.status === 'completed' && result.nextPhase === null
+        : result.status === 'phase-complete' && result.nextPhase === request.phase + 1;
       if (!valid) throw new ProductApiError('INVALID_RESPONSE');
-      const base = { sessionId: request.sessionId, phase: request.phase, status: result.status as 'phase-complete' | 'completed', nextPhase: result.nextPhase as 2 | 3 | null,
+      const base = { sessionId: request.sessionId, phase: request.phase, status: result.status as 'phase-complete' | 'completed', nextPhase: result.nextPhase as number | null,
         phaseTransitions: readPhaseTransitions(result.phaseTransitions, request.phase) };
-      return { ok: true, result: last ? { ...base, measurements: readMeasurements(result.measurements) } : base };
+      return { ok: true, result: last ? { ...base, measurements: readMeasurements(result.measurements, shape) } : base };
     },
   };
 }

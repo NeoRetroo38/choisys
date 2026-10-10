@@ -35,6 +35,9 @@ export default function Cube() {
     <Screen title={cube.name} onBack={back}>
       {notice && <EmptyState alert text={notice} />}
       <Text style={styles.meta}>v{cube.version} · {cube.phases.length} {cube.phases.length === 1 ? 'fase' : 'fases'}</Text>
+      <Section>
+        <ActionRow label="Jugar este cubo" value="→" onPress={() => router.push({ pathname: '/play', params: { cube: cube.cubeId } })} />
+      </Section>
       {cube.phases.map((phase, index) => <Section key={index} label={`fase ${index + 1} · ${phase.label}`}>
         <Text style={styles.shape}>{phase.columns.length} × {phase.rows.length}</Text>
         <View style={styles.grid}>
