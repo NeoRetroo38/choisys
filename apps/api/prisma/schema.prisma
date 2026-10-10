@@ -74,6 +74,7 @@ model Profile {
   updatedAt           DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
   account             Account       @relation(fields: [accountId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   cubeData            CubeData[]
+  cubes               Cube[]
   roleChangesReceived RoleChange[]  @relation("RoleChangeTarget")
   roleChangesMade     RoleChange[]  @relation("RoleChangeActor")
   roleRequests        RoleRequest[] @relation("RoleRequestTarget")
@@ -115,11 +116,14 @@ model CubeData {
   metadata        Json?          @db.JsonB
   engineVersion   String         @map("engine_version") @db.VarChar(64)
   scenarioVersion String         @map("scenario_version") @db.VarChar(64)
+  cubeVersionId   String?        @map("cube_version_id") @db.Uuid
+  hidden          Boolean        @default(false)
   createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
   profile         Profile        @relation(fields: [profileId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   run             CubeData?      @relation("RunSessions", fields: [runId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   sessions        CubeData[]     @relation("RunSessions")
+  cubeVersion     CubeVersion?   @relation(fields: [cubeVersionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
 
   @@unique([runId, sessionIndex])
   @@unique([runId, phaseIndex])
@@ -173,4 +177,33 @@ model RoleChange {
   @@index([actorProfileId])
   @@index([createdAt])
   @@map("role_changes")
+}
+
+/// Cubo de usuario (choisys#84): su dueño y su nombre. La estructura vive en versiones inmutables.
+model Cube {
+  id             String        @id @default(uuid()) @db.Uuid
+  ownerProfileId String        @map("owner_profile_id") @db.Uuid
+  name           String        @db.VarChar(120)
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+  owner          Profile       @relation(fields: [ownerProfileId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  versions       CubeVersion[]
+
+  @@index([ownerProfileId])
+  @@map("cubes")
+}
+
+/// Estructura de una versión: fases con su semántica y una etiqueta por fila y por columna.
+/// Nunca se modifica: cambiar la estructura crea otra versión (choisys#85).
+model CubeVersion {
+  id        String     @id @default(uuid()) @db.Uuid
+  cubeId    String     @map("cube_id") @db.Uuid
+  version   Int
+  phases    Json       @db.JsonB
+  createdAt DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  cube      Cube       @relation(fields: [cubeId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  runs      CubeData[]
+
+  @@unique([cubeId, version])
+  @@map("cube_versions")
 }
