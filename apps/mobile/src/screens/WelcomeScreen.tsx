@@ -1,4 +1,4 @@
-import { Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Line } from 'react-native-svg';
 import { font } from '../ui/theme';
@@ -11,19 +11,20 @@ const steps = [['01', 'Eliges'], ['02', 'Se registra'], ['03', 'Lo ves en 3D']] 
 /** First contact: what choisys is in one look, then a single way in. */
 export default function WelcomeScreen({ onContinue }: WelcomeScreenProps) {
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const column = Math.min(width, 560);
-  const cube = Math.min(column * 0.62, 300);
-  return <View style={[styles.screen, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 28 }]}>
+  // Bounded by height too, so a phone in landscape keeps everything on screen.
+  const cube = Math.min(column * 0.62, 300, height * 0.3);
+  return <ScrollView style={styles.screen} contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 28 }]}>
     <View style={styles.column}>
       <Image source={require('../../assets/brand/scenarys-mark-white.png')} accessibilityLabel="Scenarys"
         resizeMode="contain" style={styles.mark} />
       <FadeIn style={styles.hero} duration={520}>
         <HeroCube size={cube} />
-        <Text style={styles.eyebrow}>every choisys is a fresh start</Text>
-        <Text accessibilityRole="header" style={[styles.brand, { fontSize: Math.min(column * 0.15, 72) }]}>choisys</Text>
+        <Text style={styles.eyebrow}>scenarys presenta</Text>
+        <Text accessibilityRole="header" style={[styles.brand, { fontSize: Math.min(column * 0.15, 72, height * 0.11) }]}>choisys</Text>
         <Text style={styles.headline}>Tus decisiones, en tres dimensiones.</Text>
-        <Text style={styles.body}>Tres fases. Un toque en cada una. Cada intento queda registrado y se dibuja en tu cubo.</Text>
+        <Text style={styles.body}>Tres fases. Un toque en cada una. Cada intento queda registrado y se dibuja en el cubo.</Text>
         <View style={styles.steps}>
           {steps.map(([number, label]) => <View key={number} style={styles.step}>
             <Text style={styles.stepNumber}>{number}</Text>
@@ -36,7 +37,7 @@ export default function WelcomeScreen({ onContinue }: WelcomeScreenProps) {
         <Text style={styles.ctaText}>Empezar</Text>
       </Pressable>
     </View>
-  </View>;
+  </ScrollView>;
 }
 
 // Decorative only: a fixed isometric wireframe in the cube view's language (white edges, green axes).
@@ -73,7 +74,8 @@ function HeroCube({ size }: { size: number }) {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#000000', alignItems: 'center' },
+  screen: { flex: 1, backgroundColor: '#000000' },
+  scroll: { flexGrow: 1, alignItems: 'center' },
   column: { flex: 1, width: '100%', maxWidth: 560, paddingHorizontal: 28 },
   mark: { width: 26, height: 30, opacity: 0.9 },
   hero: { flex: 1, justifyContent: 'center', alignItems: 'center' },
