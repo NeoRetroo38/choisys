@@ -64,7 +64,7 @@ export default function AuthScreen({ mode, busy, error, onSubmit, onModeChange, 
             {register ? 'crear cuenta.' : 'iniciar sesión.'}
           </Text>
           <Text style={styles.subtitle}>
-            {register ? 'Tu espacio para elegir.' : 'Continúa donde empieza tu elección.'}
+            {register ? 'Crea tu cuenta y cada intento quedará guardado en tu cubo.' : 'Tu cubo te espera.'}
           </Text>
 
           {register && <View style={styles.field}>
