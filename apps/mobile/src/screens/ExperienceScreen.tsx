@@ -34,7 +34,8 @@ export default function ExperienceScreen({ client, onSignOut, onAccount, onUnaut
   const [showCube, setShowCube] = useState(false);
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const canvasWidth = Math.min(width, 560);
+  // Bounded by height too: on a landscape phone the grid and start button must fit without scrolling.
+  const canvasWidth = Math.min(width, 560, height * 0.62);
   const { phases, rows, columns } = state.shape;
   // Misma medida que el vanilla con 3 columnas; con más columnas, los círculos encogen para caber.
   const cell = Math.min(canvasWidth * 0.239, (canvasWidth * 0.84) / columns);
