@@ -120,7 +120,10 @@ export default function ExperienceScreen({ client, onSignOut, onAccount, onUnaut
     );
   }
 
-  const viewCube = !cubeId && history.length > 0 && <Pressable accessibilityRole="button" onPress={() => { playSound('cube'); setShowCube(true); }}
+  const openCube = () => { playSound('cube'); setShowCube(true); };
+  // After a vanilla run the cube is the payoff, so it becomes the main action.
+  const cubeFirst = !cubeId && history.length > 0;
+  const viewCube = cubeFirst && <Pressable accessibilityRole="button" onPress={openCube}
     style={({ pressed }) => [styles.back, pressed && styles.pressed]}>
     <Text style={styles.secondaryText}>Ver mi cubo</Text>
   </Pressable>;
@@ -134,6 +137,7 @@ export default function ExperienceScreen({ client, onSignOut, onAccount, onUnaut
       }]}>
         {state.screen === 'home' && <FadeIn key="home" style={[styles.home, { minHeight: Math.max(440, height - insets.top - insets.bottom - 82) }]}>
           <Text style={[styles.brand, { fontSize: canvasWidth * 0.092 }]}>choisys</Text>
+          <Text style={styles.homeLine}>{cubeId ? 'Un toque en cada fase.' : 'Tres fases. Un toque en cada una.'}</Text>
           <Pressable accessibilityRole="button" accessibilityLabel={cubeId ? 'Comenzar las fases del cubo' : 'Comenzar las tres fases'}
             accessibilityHint="Elige un círculo en cada fase."
             accessibilityState={{ disabled: state.busy, busy: state.busy }} disabled={state.busy}
@@ -191,12 +195,24 @@ export default function ExperienceScreen({ client, onSignOut, onAccount, onUnaut
             {Array.from({ length: phases }, (_, dot) => <View key={dot} style={styles.completedDot} />)}
           </View>
           <Text accessibilityRole="header" accessibilityLiveRegion="polite" style={styles.resultTitle}>{phases} {phases === 1 ? 'fase completada' : 'fases completadas'}.</Text>
-          <Text style={styles.resultCopy}>Cada elección cuenta.</Text>
-          <Pressable accessibilityRole="button" onPress={start} disabled={state.busy}
-            style={({ pressed }) => [styles.confirm, styles.newRun, state.busy && styles.disabled, pressed && styles.pressed]}>
-            <Text style={styles.confirmText}>Volver a empezar</Text>
-          </Pressable>
-          {viewCube}
+          {cubeFirst ? <>
+            <Text style={styles.resultCopy}>Tu intento ya forma parte de tu cubo.</Text>
+            <Pressable accessibilityRole="button" onPress={openCube}
+              style={({ pressed }) => [styles.confirm, styles.newRun, pressed && styles.pressed]}>
+              <Text style={styles.confirmText}>Ver mi cubo</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" onPress={start} disabled={state.busy}
+              style={({ pressed }) => [styles.back, state.busy && styles.disabled, pressed && styles.pressed]}>
+              <Text style={styles.secondaryText}>Volver a empezar</Text>
+            </Pressable>
+          </> : <>
+            <Text style={styles.resultCopy}>Cada elección cuenta.</Text>
+            <Pressable accessibilityRole="button" onPress={start} disabled={state.busy}
+              style={({ pressed }) => [styles.confirm, styles.newRun, state.busy && styles.disabled, pressed && styles.pressed]}>
+              <Text style={styles.confirmText}>Volver a empezar</Text>
+            </Pressable>
+            {viewCube}
+          </>}
           <Pressable accessibilityRole="button" onPress={() => dispatch({ type: 'reset' })} disabled={state.busy}
             style={({ pressed }) => [styles.back, pressed && styles.pressed]}>
             <Text style={styles.secondaryText}>Volver al inicio</Text>
@@ -218,6 +234,7 @@ const styles = StyleSheet.create({
   content: { width: '100%', maxWidth: 560, alignSelf: 'center' },
   home: { alignItems: 'center', justifyContent: 'center', paddingBottom: 30 },
   brand: { fontWeight: '400', letterSpacing: -1.2, color: '#000000' },
+  homeLine: { color: '#707070', fontSize: 14, lineHeight: 21, marginTop: 10, textAlign: 'center' },
   start: { borderRadius: 999, backgroundColor: '#000000', alignItems: 'center', justifyContent: 'center' },
   dots: { gap: 7 },
   dot: { width: 7, height: 7, borderRadius: 99, backgroundColor: '#ffffff' },
