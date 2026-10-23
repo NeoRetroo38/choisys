@@ -33,13 +33,14 @@ function fakeDb() {
         return { id: cube.id };
       },
       findMany: async ({ where }: { where: { ownerProfileId: string } }) => state.cubes.filter(c => c.ownerProfileId === where.ownerProfileId).map(c => ({
-        ...c, versions: versionsOf(c.id).map(v => ({ ...v, _count: { runs: state.runs.filter(r => r.cubeVersionId === v.id).length } })),
+        ...c, versions: versionsOf(c.id).map(v => ({ ...v, shares: [], _count: { runs: state.runs.filter(r => r.cubeVersionId === v.id).length } })),
       })),
       findFirst: async ({ where }: { where: { id: string; ownerProfileId: string } }) => {
         const c = state.cubes.find(x => x.id === where.id && x.ownerProfileId === where.ownerProfileId);
         return c ? { ...c, versions: versionsOf(c.id) } : null;
       },
     },
+    cubeShare: { findMany: async () => [] },
     cubeData: {
       findMany: async ({ where }: { where: { profileId: string; cubeVersionId: { in: string[] } } }) =>
         state.runs.filter(r => r.profileId === where.profileId && r.cubeVersionId !== null && where.cubeVersionId.in.includes(r.cubeVersionId)),

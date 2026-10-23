@@ -13,6 +13,8 @@ import { SystemService, engineProbe } from './services/systemService.js';
 import { RoleRequestService } from './services/roleRequestService.js';
 import { PrismaRoleRequestRepository } from './services/prismaRoleRequestRepository.js';
 import { CubeService } from './services/cubeService.js';
+import { ShareService } from './services/shareService.js';
+import { NeoCubeClient } from './neoCubeClient.js';
 
 try {
   const config = readConfig();
@@ -33,7 +35,8 @@ try {
   if (devAuthFile) console.warn('DEV ONLY: accounts use the private local persistent store.');
   else if (devMemory) console.warn('DEV ONLY: accounts are kept in memory and lost on restart.');
   else if (!auth) console.warn('Account service unavailable: configure DATABASE_URL and apply database migrations.');
-  const server = createApp(config, undefined, { auth, runRecorder: database ? new PrismaRunRecorder(database) : undefined, me: database ? new MeService(database, roleRequests) : undefined, admin: database ? new AdminService(database) : undefined, cubes: database ? new CubeService(database) : undefined, connections, roleRequests, system: new SystemService(database, engineProbe(config.token), connections) }).listen(config.port, config.host, () => {
+  const engine = new NeoCubeClient(config.token, config.timeoutMs);
+  const server = createApp(config, engine, { auth, shares: database ? new ShareService(database, engine) : undefined, runRecorder: database ? new PrismaRunRecorder(database) : undefined, me: database ? new MeService(database, roleRequests) : undefined, admin: database ? new AdminService(database) : undefined, cubes: database ? new CubeService(database) : undefined, connections, roleRequests, system: new SystemService(database, engineProbe(config.token), connections) }).listen(config.port, config.host, () => {
     console.log(`choisys-api listening on http://${config.host}:${config.port}`);
   });
   server.requestTimeout = 10_000;

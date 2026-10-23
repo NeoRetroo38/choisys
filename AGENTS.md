@@ -30,6 +30,8 @@ El móvil nunca llama al puerto 8765 ni recibe la credencial del servicio.
    el tiempo entre fases medido por la API. Es observación, no cálculo del Cubo. Si algún día alimenta la
    inferencia, debe enviarse al motor C++ y no calcularse en TypeScript. Un reintento de una fase ya aceptada
    debe devolver la misma respuesta y no añadir tiempos.
+   **Aprobado por el dueño (23 oct):** `similarity` y `phases[].similarity` de `POST /compare` del motor
+   (cubos de referencia, `docs/SHARED-CUBES.md`). Los calcula solo C++; la API los guarda y la app los muestra.
 5. **Modelo de ejecución:** 3 fases; un Run = un intento completo; cuadrícula 3×3 por fase (cubo 3×3×3).
 6. **El dominio no usa valores negativos como centinelas.** Los estados ausentes son explícitos.
 7. **Roles:** `USER < ADMIN < DEV < SUPERADMIN < SUPERDEV`. Solo USER y SUPERDEV tienen capacidades propias

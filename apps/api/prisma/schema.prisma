@@ -102,28 +102,33 @@ model RoleRequest {
   @@map("role_requests")
 }
 
+/// A row belongs to exactly one owner: an account profile or an anonymous participant of a shared cube
+/// (CHECK constraint in the 20261023 migration).
 model CubeData {
-  id              String         @id @default(uuid()) @db.Uuid
-  profileId       String         @map("profile_id") @db.Uuid
+  id              String           @id @default(uuid()) @db.Uuid
+  profileId       String?          @map("profile_id") @db.Uuid
+  participantId   String?          @map("participant_id") @db.Uuid
   type            CubeDataType
-  runId           String?        @map("run_id") @db.Uuid
-  sessionIndex    Int?           @map("session_index")
-  phaseIndex      Int?           @map("phase_index")
-  status          CubeDataStatus @default(CREATED)
-  inputData       Json?          @map("input_data") @db.JsonB
-  outputData      Json?          @map("output_data") @db.JsonB
-  inferenceData   Json?          @map("inference_data") @db.JsonB
-  metadata        Json?          @db.JsonB
-  engineVersion   String         @map("engine_version") @db.VarChar(64)
-  scenarioVersion String         @map("scenario_version") @db.VarChar(64)
-  cubeVersionId   String?        @map("cube_version_id") @db.Uuid
-  hidden          Boolean        @default(false)
-  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
-  profile         Profile        @relation(fields: [profileId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  run             CubeData?      @relation("RunSessions", fields: [runId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  sessions        CubeData[]     @relation("RunSessions")
-  cubeVersion     CubeVersion?   @relation(fields: [cubeVersionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  runId           String?          @map("run_id") @db.Uuid
+  sessionIndex    Int?             @map("session_index")
+  phaseIndex      Int?             @map("phase_index")
+  status          CubeDataStatus   @default(CREATED)
+  inputData       Json?            @map("input_data") @db.JsonB
+  outputData      Json?            @map("output_data") @db.JsonB
+  inferenceData   Json?            @map("inference_data") @db.JsonB
+  metadata        Json?            @db.JsonB
+  engineVersion   String           @map("engine_version") @db.VarChar(64)
+  scenarioVersion String           @map("scenario_version") @db.VarChar(64)
+  cubeVersionId   String?          @map("cube_version_id") @db.Uuid
+  hidden          Boolean          @default(false)
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  profile         Profile?         @relation(fields: [profileId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  participant     CubeParticipant? @relation(fields: [participantId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  referenceFor    CubeShare[]
+  run             CubeData?        @relation("RunSessions", fields: [runId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  sessions        CubeData[]       @relation("RunSessions")
+  cubeVersion     CubeVersion?     @relation(fields: [cubeVersionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
 
   @@unique([runId, sessionIndex])
   @@unique([runId, phaseIndex])
@@ -132,6 +137,7 @@ model CubeData {
   @@index([type])
   @@index([createdAt])
   @@index([profileId, createdAt])
+  @@index([participantId])
   @@map("cube_data")
 }
 
@@ -196,14 +202,48 @@ model Cube {
 /// Estructura de una versión: fases con su semántica y una etiqueta por fila y por columna.
 /// Nunca se modifica: cambiar la estructura crea otra versión (choisys#85).
 model CubeVersion {
-  id        String     @id @default(uuid()) @db.Uuid
-  cubeId    String     @map("cube_id") @db.Uuid
+  id        String      @id @default(uuid()) @db.Uuid
+  cubeId    String      @map("cube_id") @db.Uuid
   version   Int
-  phases    Json       @db.JsonB
-  createdAt DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
-  cube      Cube       @relation(fields: [cubeId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  phases    Json        @db.JsonB
+  createdAt DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  cube      Cube        @relation(fields: [cubeId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   runs      CubeData[]
+  shares    CubeShare[]
 
   @@unique([cubeId, version])
   @@map("cube_versions")
+}
+
+/// Enlace compartido de una versión concreta: el Run de referencia del dueño y un token no predecible.
+/// Si el Run de referencia desapareciera, el enlace y sus participantes se conservan sin comparación.
+/// Cerrar no borra nada: solo impide nuevos participantes y nuevas sesiones.
+model CubeShare {
+  id             String            @id @default(uuid()) @db.Uuid
+  cubeVersionId  String            @map("cube_version_id") @db.Uuid
+  referenceRunId String?           @map("reference_run_id") @db.Uuid
+  token          String            @unique @db.VarChar(64)
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  closedAt       DateTime?         @map("closed_at") @db.Timestamptz(3)
+  cubeVersion    CubeVersion       @relation(fields: [cubeVersionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  referenceRun   CubeData?         @relation(fields: [referenceRunId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  participants   CubeParticipant[]
+
+  @@index([cubeVersionId])
+  @@map("cube_shares")
+}
+
+/// Persona sin cuenta que entra por un enlace. Solo se guarda el hash de su token de acceso.
+model CubeParticipant {
+  id          String     @id @default(uuid()) @db.Uuid
+  shareId     String     @map("share_id") @db.Uuid
+  displayName String     @map("display_name") @db.VarChar(120)
+  email       String?    @db.VarChar(320)
+  tokenHash   String     @unique @map("token_hash") @db.VarChar(64)
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  share       CubeShare  @relation(fields: [shareId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  runs        CubeData[]
+
+  @@index([shareId])
+  @@map("cube_participants")
 }
