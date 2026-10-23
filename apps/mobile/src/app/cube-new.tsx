@@ -10,12 +10,12 @@ import Section from '../ui/Section';
 import { color, font, inputChrome, space } from '../ui/theme';
 import { emptyDraft, fromCube, toCube, type CubeDraft } from '../cubes/cubeForm';
 
-function Field({ label, value, onChange, numeric, hint }: { label: string; value: string; onChange: (v: string) => void; numeric?: boolean; hint?: string }) {
+function Field({ label, value, onChange, numeric, hint, multiline }: { label: string; value: string; onChange: (v: string) => void; numeric?: boolean; hint?: string; multiline?: boolean }) {
   return <View style={styles.field}>
     <Text style={styles.fieldLabel}>{label}</Text>
     <TextInput {...inputChrome} value={value} onChangeText={onChange} accessibilityLabel={label} placeholder={hint}
       placeholderTextColor={color.faint} keyboardType={numeric ? 'number-pad' : 'default'} autoCapitalize="none" autoCorrect={false}
-      maxLength={numeric ? 2 : 600} style={styles.input} />
+      maxLength={numeric ? 2 : 600} multiline={multiline} style={styles.input} />
   </View>;
 }
 
@@ -51,6 +51,8 @@ export default function CubeNew() {
     <Screen title={title} onBack={back}>
       <Section>
         <Field label="Nombre" value={draft.name} onChange={name => set({ name })} hint="Decidir el stack" />
+        <Field label="Descripción (opcional, la ve quien abra el enlace)" value={draft.description} multiline
+          onChange={description => set({ description })} hint="Qué es este cubo y para qué se usa" />
       </Section>
       <Section label="fases">
         <View style={styles.pair}>

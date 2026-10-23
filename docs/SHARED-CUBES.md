@@ -36,6 +36,9 @@ app → API choisys (valida, autoriza, guarda) → 127.0.0.1:8765 neo-cube-servi
 
 ## Versionado
 
+El cubo puede tener una descripción opcional (`cubes.description`, hasta 600 caracteres, migración
+`20261023120000_cube_description`). Es presentación: la ve quien abre el enlace, se edita con el cubo y no crea versión.
+
 Las versiones (`cube_versions`) son inmutables. Editar un cubo (`POST /cubes/:id/versions`) crea la siguiente.
 Un enlace apunta a la versión de su run de referencia; sus participantes, runs y comparaciones siguen en esa
 versión aunque el cubo cambie después.
@@ -57,7 +60,7 @@ Público (sin cuenta):
 
 | Método | Ruta | Auth | Respuesta |
 |---|---|---|---|
-| GET | `/c/:token` | — | `{ name, shape, open }` |
+| GET | `/c/:token` | — | `{ name, description, shape, open }` |
 | POST | `/c/:token/participants` | — | 201 `{ participantToken }` (`{ displayName, email? }`) |
 | POST | `/c/:token/sessions` | `Bearer <participantToken>` | igual que `/sessions` (`{}` como cuerpo) |
 | POST | `/c/:token/evaluate` | `Bearer <participantToken>` | igual que `/evaluate` |

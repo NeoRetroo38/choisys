@@ -190,6 +190,8 @@ model Cube {
   id             String        @id @default(uuid()) @db.Uuid
   ownerProfileId String        @map("owner_profile_id") @db.Uuid
   name           String        @db.VarChar(120)
+  /// Shown to people who open a shared link. Presentation only: changing it does not create a version.
+  description    String?       @db.VarChar(600)
   createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
   owner          Profile       @relation(fields: [ownerProfileId], references: [id], onDelete: Cascade, onUpdate: Cascade)

@@ -45,6 +45,7 @@ export default function Cube() {
   return (
     <Screen title={cube.name} onBack={back}>
       {notice && <EmptyState alert text={notice} />}
+      {cube.description && <Text style={styles.description}>{cube.description}</Text>}
       <Text style={styles.meta}>v{cube.version} · {cube.phases.length} {cube.phases.length === 1 ? 'fase' : 'fases'}{openShares > 0 ? ' · referencia publicada' : ''}</Text>
       <Section>
         <ActionRow label="Jugar este cubo" value="→" onPress={() => router.push({ pathname: '/play', params: { cube: cube.cubeId } })} />
@@ -85,6 +86,7 @@ export default function Cube() {
 
 const cellSize = 14;
 const styles = StyleSheet.create({
+  description: { fontSize: 15, lineHeight: 23, color: color.ink, fontFamily: font.text, fontWeight: '300', marginBottom: space.s },
   meta: { fontSize: 12, color: color.muted, fontFamily: font.mono, marginBottom: space.m },
   shape: { fontSize: 13, color: color.ink, fontFamily: font.mono, marginBottom: space.xs },
   grid: { alignSelf: 'flex-start', gap: 3, marginBottom: space.s },
