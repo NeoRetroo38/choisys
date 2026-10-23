@@ -11,3 +11,8 @@ export function participantRows(people: ShareParticipant[], order: ParticipantOr
   if (order === 'name') return [...kept].sort((a, b) => a.displayName.localeCompare(b.displayName, 'es'));
   return kept;
 }
+
+/** At most two selected: one is compared with the reference, two with each other. A third replaces the oldest. */
+export function toggleSelection(current: string[], id: string): string[] {
+  return current.includes(id) ? current.filter(x => x !== id) : [...current, id].slice(-2);
+}
