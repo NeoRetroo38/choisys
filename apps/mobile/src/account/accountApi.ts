@@ -92,7 +92,7 @@ function readCubeSummary(value: unknown): CubeSummary {
   const openShares = value.openShares ?? 0, participants = value.participants ?? 0;
   if (!isCount(openShares, 0, 100_000) || !isCount(participants, 0, 10_000_000)) throw invalid();
   return { cubeId: value.cubeId, name: value.name, version: value.version, phases: value.phases, runs: value.runs, createdAt: value.createdAt,
-    openShares, participants };
+    openShares, participants, archived: value.archived === true };
 }
 
 const isToken = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9_-]{43}$/.test(value);
@@ -133,7 +133,7 @@ function readCubeResponse(value: unknown): CubeDetail {
   // An API from before descriptions omits the field.
   const description = cube.description ?? null;
   if (description !== null && !isText(description, 600)) throw invalid();
-  return { cubeId: cube.cubeId, name: cube.name, description, version: cube.version, versionId: cube.versionId, createdAt: cube.createdAt,
+  return { cubeId: cube.cubeId, name: cube.name, description, archived: cube.archived === true, version: cube.version, versionId: cube.versionId, createdAt: cube.createdAt,
     phases: readPhases(cube.phases), runs: cube.runs.map(readCubeRun), shares: (cube.shares ?? []).map(readShareSummary) };
 }
 
@@ -230,6 +230,10 @@ export function createAccountApi(baseUrl: string | undefined, getToken: () => st
       return readShareResponse(await call(`/cubes/${encodeURIComponent(cubeId)}/shares/${encodeURIComponent(shareId)}/close`, {}, 2_000_000));
     },
     /** Ocultar no borra: el servidor guarda la run y la puede volver a mostrar. */
+    /** Archivar cierra sus enlaces y lo saca de la lista; no borra nada. */
+    async setArchived(cubeId: string, archived: boolean): Promise<CubeDetail> {
+      return readCubeResponse(await call(`/cubes/${encodeURIComponent(cubeId)}/archive`, { archived }, 1_000_000));
+    },
     async setRunHidden(cubeId: string, runId: string, hidden: boolean): Promise<CubeDetail> {
       return readCubeResponse(await call(`/cubes/${encodeURIComponent(cubeId)}/runs/${encodeURIComponent(runId)}/visibility`, { hidden }, 1_000_000));
     },

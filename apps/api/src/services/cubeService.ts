@@ -68,7 +68,7 @@ export class CubeService {
     requireCapability(actor, 'cubes.manage.own');
     const rows = await this.db.cube.findMany({
       where: { ownerProfileId: actor.profileId }, orderBy: { createdAt: 'desc' }, take: MAX_CUBES,
-      select: { id: true, name: true, createdAt: true,
+      select: { id: true, name: true, createdAt: true, archivedAt: true,
         versions: { orderBy: { version: 'desc' }, select: { version: true, phases: true,
           // Solo las runs del dueño: las de participantes se cuentan aparte.
           _count: { select: { runs: { where: { participantId: null } } } },
@@ -77,7 +77,7 @@ export class CubeService {
     return { ok: true, cubes: rows.map(row => {
       const shares = row.versions.flatMap(version => version.shares);
       return {
-        cubeId: row.id, name: row.name, createdAt: row.createdAt.toISOString(),
+        cubeId: row.id, name: row.name, createdAt: row.createdAt.toISOString(), archived: row.archivedAt !== null,
         version: row.versions[0]?.version ?? 1,
         phases: Array.isArray(row.versions[0]?.phases) ? (row.versions[0].phases as unknown[]).length : 0,
         runs: row.versions.reduce((total, version) => total + version._count.runs, 0),
@@ -116,7 +116,7 @@ export class CubeService {
     requireCapability(actor, 'cubes.manage.own');
     const cube = await this.db.cube.findFirst({
       where: { id: cubeId, ownerProfileId: actor.profileId },
-      select: { id: true, name: true, description: true, createdAt: true, versions: { orderBy: { version: 'desc' }, select: { id: true, version: true, phases: true } } },
+      select: { id: true, name: true, description: true, createdAt: true, archivedAt: true, versions: { orderBy: { version: 'desc' }, select: { id: true, version: true, phases: true } } },
     });
     // Un cubo ajeno responde igual que uno inexistente: no se revela que existe.
     if (!cube || cube.versions.length === 0) throw new ApiError(404, 'NOT_FOUND');
@@ -133,7 +133,7 @@ export class CubeService {
     });
     const latest = cube.versions[0];
     const detail: CubeDetail = {
-      cubeId: cube.id, name: cube.name, description: cube.description, createdAt: cube.createdAt.toISOString(),
+      cubeId: cube.id, name: cube.name, description: cube.description, archived: cube.archivedAt !== null, createdAt: cube.createdAt.toISOString(),
       version: latest.version, versionId: latest.id, phases: latest.phases as unknown as CubePhaseDefinition[],
       runs: runs.map(run => ({
         runId: run.id, startedAt: run.createdAt.toISOString(), status: run.status === 'COMPLETED' ? 'COMPLETED' : 'ABANDONED',
@@ -157,6 +157,19 @@ export class CubeService {
     const latest = cube?.versions[0];
     if (!latest) throw new ApiError(404, 'NOT_FOUND');
     return { shape: uniformShape(latest.phases), cubeVersionId: latest.id };
+  }
+
+  /** Archivar saca el cubo de la lista y cierra sus enlaces abiertos; no borra nada. Desarchivar no reabre enlaces. */
+  async setArchived(actor: AuthActor, cubeId: string, archived: boolean): Promise<CubeResponse> {
+    requireCapability(actor, 'cubes.manage.own');
+    const owned = { id: cubeId, ownerProfileId: actor.profileId };
+    if (!await this.db.cube.findFirst({ where: owned, select: { id: true } })) throw new ApiError(404, 'NOT_FOUND');
+    const now = new Date();
+    await this.db.$transaction([
+      this.db.cube.updateMany({ where: owned, data: { archivedAt: archived ? now : null } }),
+      ...(archived ? [this.db.cubeShare.updateMany({ where: { closedAt: null, cubeVersion: { cubeId } }, data: { closedAt: now } })] : []),
+    ]);
+    return this.get(actor, cubeId);
   }
 
   /** Ocultar no borra: la run sigue guardada y se puede volver a mostrar. */

@@ -29,20 +29,22 @@ export default function Cubes() {
     api.cubes().then(setCubes, error => { setCubes([]); setNotice(errorMessage(error)); });
   }, [api, model.cubes]));
 
+  const active = (cubes ?? []).filter(cube => !cube.archived), archived = (cubes ?? []).filter(cube => cube.archived);
+  const row = (cube: CubeSummary) => <ActionRow key={cube.cubeId} label={cube.name} value="→"
+    detail={`${cube.openShares > 0 ? 'referencia · publicado · ' : ''}${cube.phases} ${cube.phases === 1 ? 'fase' : 'fases'} · v${cube.version} · ${cube.runs} ${cube.runs === 1 ? 'run' : 'runs'}${cube.participants > 0 ? ` · ${cube.participants} ${cube.participants === 1 ? 'participante' : 'participantes'}` : ''}`}
+    onPress={() => router.push({ pathname: '/cube', params: { id: cube.cubeId } })} />;
   if (!model.cubes) return <Screen title="mis cubos" onBack={back}><EmptyState text="Crear cubos es para admin y superiores." /></Screen>;
   return (
     <Screen title="mis cubos" onBack={back}>
       {notice && <EmptyState alert text={notice} />}
-      {cubes && cubes.length > 0 && <Text style={styles.summary}>{summary(cubes)}</Text>}
+      {active.length > 0 && <Text style={styles.summary}>{summary(active)}</Text>}
       <Section>
         <ActionRow label="Crear nuevo cubo" value="+" onPress={() => router.push('/cube-new')} />
       </Section>
       <Section label="tus cubos">
-        {cubes === null ? <EmptyState text="…" /> : cubes.length === 0 ? <EmptyState text="Aún no has creado ningún cubo." /> :
-          cubes.map(cube => <ActionRow key={cube.cubeId} label={cube.name} value="→"
-            detail={`${cube.openShares > 0 ? 'referencia · publicado · ' : ''}${cube.phases} ${cube.phases === 1 ? 'fase' : 'fases'} · v${cube.version} · ${cube.runs} ${cube.runs === 1 ? 'run' : 'runs'}${cube.participants > 0 ? ` · ${cube.participants} ${cube.participants === 1 ? 'participante' : 'participantes'}` : ''}`}
-            onPress={() => router.push({ pathname: '/cube', params: { id: cube.cubeId } })} />)}
+        {cubes === null ? <EmptyState text="…" /> : active.length === 0 ? <EmptyState text="Aún no has creado ningún cubo." /> : active.map(row)}
       </Section>
+      {archived.length > 0 && <Section label="archivados">{archived.map(row)}</Section>}
     </Screen>
   );
 }

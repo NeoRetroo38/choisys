@@ -39,6 +39,10 @@ app → API choisys (valida, autoriza, guarda) → 127.0.0.1:8765 neo-cube-servi
 El cubo puede tener una descripción opcional (`cubes.description`, hasta 600 caracteres, migración
 `20261023120000_cube_description`). Es presentación: la ve quien abre el enlace, se edita con el cubo y no crea versión.
 
+Archivar un cubo (`POST /cubes/:id/archive` con `{ archived }`, columna `cubes.archived_at`, migración
+`20261023130000_cube_archive`) lo saca de «tus cubos», cierra sus enlaces abiertos y no deja publicar otros.
+No borra nada; desarchivar no reabre enlaces.
+
 Las versiones (`cube_versions`) son inmutables. Editar un cubo (`POST /cubes/:id/versions`) crea la siguiente.
 Un enlace apunta a la versión de su run de referencia; sus participantes, runs y comparaciones siguen en esa
 versión aunque el cubo cambie después.

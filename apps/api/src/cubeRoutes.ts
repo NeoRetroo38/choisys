@@ -29,6 +29,12 @@ export function cubeRoutes(auth: AuthService | null, cubes: CubeService, limiter
     if (!body || Object.keys(body).length !== 1 || typeof body.hidden !== 'boolean') throw new ApiError(400, 'INVALID_REQUEST');
     res.json(await cubes.setRunHidden(who, id(req.params.id), id(req.params.runId), body.hidden));
   });
+  routes.post('/cubes/:id/archive', async (req, res) => {
+    const who = await actor(req.get('authorization'));
+    const body = req.body as Record<string, unknown> | undefined;
+    if (!body || Object.keys(body).length !== 1 || typeof body.archived !== 'boolean') throw new ApiError(400, 'INVALID_REQUEST');
+    res.json(await cubes.setArchived(who, id(req.params.id), body.archived));
+  });
   /** Editar la estructura crea la versión siguiente; los enlaces y runs anteriores siguen en la suya. */
   routes.post('/cubes/:id/versions', async (req, res) => {
     const who = await actor(req.get('authorization'));

@@ -17,6 +17,7 @@ export default function Cube() {
   const [cube, setCube] = useState<CubeDetail | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [confirmArchive, setConfirmArchive] = useState(false);
   const back = () => router.canGoBack() ? router.back() : router.replace('/cubes');
   useFocusEffect(useCallback(() => {
     if (!model.cubes || !id) return;
@@ -27,6 +28,13 @@ export default function Cube() {
     if (!cube) return;
     setBusy(runId);
     try { setCube(await api.setRunHidden(cube.cubeId, runId, hidden)); } catch (error) { setNotice(errorMessage(error)); } finally { setBusy(null); }
+  }
+
+  async function archive() {
+    if (!cube) return;
+    if (!cube.archived && !confirmArchive) { setConfirmArchive(true); return; }
+    setBusy('archive');
+    try { setCube(await api.setArchived(cube.cubeId, !cube.archived)); } catch (error) { setNotice(errorMessage(error)); } finally { setBusy(null); setConfirmArchive(false); }
   }
 
   async function publish(referenceRunId: string) {
@@ -46,14 +54,14 @@ export default function Cube() {
     <Screen title={cube.name} onBack={back}>
       {notice && <EmptyState alert text={notice} />}
       {cube.description && <Text style={styles.description}>{cube.description}</Text>}
-      <Text style={styles.meta}>v{cube.version} · {cube.phases.length} {cube.phases.length === 1 ? 'fase' : 'fases'}{openShares > 0 ? ' · referencia publicada' : ''}</Text>
+      <Text style={styles.meta}>v{cube.version} · {cube.phases.length} {cube.phases.length === 1 ? 'fase' : 'fases'}{cube.archived ? ' · archivado' : openShares > 0 ? ' · referencia publicada' : ''}</Text>
       <Section>
         <ActionRow label="Jugar este cubo" value="→" onPress={() => router.push({ pathname: '/play', params: { cube: cube.cubeId } })} />
         <ActionRow label="Editar estructura" value="→" detail={`Crea la v${cube.version + 1}. Lo ya publicado sigue en su versión.`}
           onPress={() => router.push({ pathname: '/cube-new', params: { id: cube.cubeId } })} />
       </Section>
       <Section label="compartir">
-        {reference ? <ActionRow label="Publicar como referencia" value="→" busy={busy === 'publish'}
+        {cube.archived ? <EmptyState text="Desarchívalo para publicar un enlace nuevo." /> : reference ? <ActionRow label="Publicar como referencia" value="→" busy={busy === 'publish'}
           detail={`Tu última run de la v${cube.version} será el patrón con el que se compara a quien responda por el enlace.`}
           onPress={() => void publish(reference.runId)} />
           : <EmptyState text={`Juega la v${cube.version} una vez: esa run será la referencia.`} />}
@@ -72,6 +80,11 @@ export default function Cube() {
         <Text style={styles.axis}>columnas: {phase.columns.join(' · ')}</Text>
         <Text style={styles.axis}>filas: {phase.rows.join(' · ')}</Text>
       </Section>)}
+      <Section>
+        <ActionRow label={cube.archived ? 'Desarchivar' : confirmArchive ? 'Pulsa otra vez para archivar' : 'Archivar cubo'} busy={busy === 'archive'}
+          tone={cube.archived ? 'default' : 'danger'} onPress={() => void archive()}
+          detail={cube.archived ? 'Vuelve a «tus cubos». Los enlaces siguen cerrados.' : 'Sale de «tus cubos» y cierra sus enlaces. No se borra nada.'} />
+      </Section>
       <Section label="runs">
         {cube.runs.length === 0 ? <EmptyState text="Este cubo aún no tiene runs." /> :
           cube.runs.map(run => <ActionRow key={run.runId} busy={busy === run.runId}
