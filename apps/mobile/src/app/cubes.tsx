@@ -7,6 +7,16 @@ import ActionRow from '../ui/ActionRow';
 import EmptyState from '../ui/EmptyState';
 import Screen from '../ui/Screen';
 import Section from '../ui/Section';
+import { StyleSheet, Text } from 'react-native';
+import { color, font, space } from '../ui/theme';
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+/** Counts as the server sent them: cubes, published references and people who answered by link. */
+const summary = (cubes: CubeSummary[]) => [
+  plural(cubes.length, 'cubo', 'cubos'),
+  plural(cubes.filter(c => c.openShares > 0).length, 'referencia publicada', 'referencias publicadas'),
+  plural(cubes.reduce((total, c) => total + c.participants, 0), 'participante', 'participantes'),
+].join(' · ');
 
 /** «Mis cubos»: los cubos que ha creado esta persona (admin y superiores). */
 export default function Cubes() {
@@ -23,6 +33,7 @@ export default function Cubes() {
   return (
     <Screen title="mis cubos" onBack={back}>
       {notice && <EmptyState alert text={notice} />}
+      {cubes && cubes.length > 0 && <Text style={styles.summary}>{summary(cubes)}</Text>}
       <Section>
         <ActionRow label="Crear nuevo cubo" value="+" onPress={() => router.push('/cube-new')} />
       </Section>
@@ -35,3 +46,7 @@ export default function Cubes() {
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  summary: { fontSize: 12, color: color.muted, fontFamily: font.mono, marginBottom: space.m },
+});

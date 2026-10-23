@@ -81,3 +81,10 @@ test('un participante juega por /c/<enlace>/… con su token, nunca por /session
   assert.equal(started.session.shape.phases, 2);
   assert.deepEqual(calls, [{ url: `http://127.0.0.1:3000/c/${link}/sessions`, body: {}, auth: 'Bearer participant-token' }]);
 });
+
+test('el QR del enlace es un código cuadrado válido para la URL completa', async () => {
+  const { toQR } = await import('toqr');
+  const modules = toQR(`https://neowebdevsolutions.com/choisys/c/${'x'.repeat(43)}`);
+  const side = Math.sqrt(modules.length);
+  assert.ok(Number.isInteger(side) && side >= 21 && (side - 17) % 4 === 0, `lado ${side}`);
+});
