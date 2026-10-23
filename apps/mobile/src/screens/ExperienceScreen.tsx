@@ -19,6 +19,8 @@ interface ExperienceScreenProps {
   onUnauthorized: () => void;
   /** Un cubo propio: misma interfaz que el vanilla, con su número de fases y su cuadrícula. */
   cubeId?: string;
+  /** Text of the way out when it is not an account (a participant of a shared cube goes back to their cube). */
+  exitLabel?: string;
 }
 
 const phaseWords = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
@@ -27,7 +29,7 @@ const phaseTitle = (phase: number) => `${phase}. fase ${phaseWords[phase - 1] ??
 const gridPositions = (rows: number, columns: number): Position[][] =>
   Array.from({ length: rows }, (_, row) => Array.from({ length: columns }, (__, column) => row * columns + column + 1));
 
-export default function ExperienceScreen({ client, onSignOut, onAccount, onUnauthorized, cubeId }: ExperienceScreenProps) {
+export default function ExperienceScreen({ client, onSignOut, onAccount, onUnauthorized, cubeId, exitLabel }: ExperienceScreenProps) {
   const [state, dispatch] = useReducer(sessionReducer, initialState);
   const inFlight = useRef(false);
   const [history, setHistory] = useState<RunMeasurements[]>([]);
@@ -221,9 +223,9 @@ export default function ExperienceScreen({ client, onSignOut, onAccount, onUnaut
         </FadeIn>}
 
         {state.screen !== 'phase' && <Pressable accessibilityRole="button" onPress={onAccount ?? onSignOut}
-          accessibilityLabel={onAccount ? 'Tu cuenta' : 'Cerrar sesión'}
+          accessibilityLabel={exitLabel ?? (onAccount ? 'Tu cuenta' : 'Cerrar sesión')}
           disabled={state.busy} style={({ pressed }) => [styles.signOut, state.busy && styles.disabled, pressed && styles.pressed]}>
-          <Text style={styles.secondaryText}>{onAccount ? 'tú' : 'Cerrar sesión'}</Text>
+          <Text style={styles.secondaryText}>{exitLabel ?? (onAccount ? 'tú' : 'Cerrar sesión')}</Text>
         </Pressable>}
       </ScrollView>
     </View>

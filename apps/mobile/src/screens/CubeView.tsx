@@ -1,12 +1,21 @@
 import { createCubeEdges } from '@neoretroo38/neo-cube-web';
 import type { Vec3 } from '@neoretroo38/neo-cube-web';
+import type { CubeShape } from '@scenarys/shared';
 import { useEffect, useState } from 'react';
 import { PanResponder, Platform, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, G, Line, Polyline, Text as SvgText } from 'react-native-svg';
 import type { RunMeasurements } from '../history/runHistory';
 import FadeIn from './FadeIn';
 
-interface CubeViewProps { runs: RunMeasurements[]; size: number }
+interface CubeViewProps {
+  runs: RunMeasurements[];
+  size: number;
+  /** Grid of the cube being drawn; the vanilla cube is 3 × (3 × 3). */
+  shape?: CubeShape;
+  /** Replaces the default «last N runs» line. */
+  caption?: string;
+}
+const VANILLA: CubeShape = { phases: 3, rows: 3, columns: 3 };
 
 const green = '#39ff14';
 // Experiment: axes in neon green; past Runs (lines and points) in red.
@@ -51,10 +60,15 @@ const inertiaStop = 0.0004;
 const outerEdges = createCubeEdges(4);
 // Distance between neighbouring decisions. The grid spans +/-gridStep; the outer cube is at +/-2.
 const gridStep = 1.5;
-const gridLevels = [-gridStep, 0, gridStep];
-const gridEdges: Array<[Vec, Vec]> = [];
-for (const a of gridLevels) for (const b of gridLevels) {
-  gridEdges.push([[-gridStep, a, b], [gridStep, a, b]], [[a, -gridStep, b], [a, gridStep, b]], [[a, b, -gridStep], [a, b, gridStep]]);
+/** n decisions along one axis, evenly spread over ±gridStep (3 → −1.5, 0, 1.5; 1 → the centre). Drawing only. */
+const levels = (n: number) => n === 1 ? [0] : Array.from({ length: n }, (_, i) => -gridStep + (2 * gridStep * i) / (n - 1));
+function latticeEdges({ phases, rows, columns }: CubeShape): Array<[Vec, Vec]> {
+  const xs = levels(columns), ys = levels(rows), zs = levels(phases);
+  const edges: Array<[Vec, Vec]> = [];
+  if (xs.length > 1) for (const y of ys) for (const z of zs) edges.push([[xs[0], y, z], [xs[xs.length - 1], y, z]]);
+  if (ys.length > 1) for (const x of xs) for (const z of zs) edges.push([[x, ys[0], z], [x, ys[ys.length - 1], z]]);
+  if (zs.length > 1) for (const x of xs) for (const y of ys) edges.push([[x, y, zs[0]], [x, y, zs[zs.length - 1]]]);
+  return edges;
 }
 
 // Axes cross at the origin (0,0,0), the pivot of the rotation. z is the phase axis, 1 → 3.
@@ -68,7 +82,9 @@ const axes: Array<{ name: string; dir: Vec; label: string }> = [
 function scaleVec(dir: Vec, amount: number): Vec { return [dir[0] * amount, dir[1] * amount, dir[2] * amount]; }
 
 /** Draws the received observations only: x = column, y = row, z = phase. Drag to rotate, tap to reset. */
-export default function CubeView({ runs, size }: CubeViewProps) {
+export default function CubeView({ runs, size, shape = VANILLA, caption }: CubeViewProps) {
+  const gridEdges = latticeEdges(shape);
+  const xs = levels(shape.columns), ys = levels(shape.rows), zs = levels(shape.phases);
   const [view, setView] = useState(defaultView);
   // Gesture bookkeeping lives in one stable object that only the gesture handlers touch (no ref reads during render).
   const [drag] = useState(() => ({ base: defaultView, current: defaultView, frame: 0 }));
@@ -109,7 +125,7 @@ export default function CubeView({ runs, size }: CubeViewProps) {
   const center = size / 2;
   const project = makeProjector(view.yaw, view.pitch, scale, center);
   const fade = makeDepthFade(view.yaw, view.pitch);
-  const point = (row: number, column: number, phase: number) => project([(column - 2) * gridStep, (row - 2) * gridStep, (phase - 2) * gridStep]);
+  const point = (row: number, column: number, phase: number) => project([xs[column - 1] ?? 0, ys[row - 1] ?? 0, zs[phase - 1] ?? 0]);
 
   const zTip = project(scaleVec([0, 0, 1], axisReach));
   const zBack = project([0, 0, 2.0]);
@@ -145,8 +161,9 @@ export default function CubeView({ runs, size }: CubeViewProps) {
           })}
           <Line x1={zTip[0]} y1={zTip[1]} x2={arrow(1)[0]} y2={arrow(1)[1]} stroke={green} strokeWidth={1.8} />
           <Line x1={zTip[0]} y1={zTip[1]} x2={arrow(-1)[0]} y2={arrow(-1)[1]} stroke={green} strokeWidth={1.8} />
-          {[1, 2, 3].map(phase => {
-            const [tx, ty] = project([0, 0, (phase - 2) * gridStep]);
+          {zs.map((z, index) => {
+            const phase = index + 1;
+            const [tx, ty] = project([0, 0, z]);
             return <G key={phase}>
               <Circle cx={tx} cy={ty} r={2.6} fill={green} />
               <SvgText x={tx + 8} y={ty - 6} fill={green} fontSize={11} fontFamily={mono}>{`f${phase}`}</SvgText>
@@ -172,8 +189,8 @@ export default function CubeView({ runs, size }: CubeViewProps) {
             </G>;
           })}
         </Svg>
-        <Text style={styles.caption}>{runs.length === 0 ? 'no runs yet' : `last ${runs.length} ${runs.length === 1 ? 'run' : 'runs'}`}</Text>
-        <Text style={styles.hint}>drag to rotate · tap to reset · phase 1 → 3</Text>
+        <Text style={styles.caption}>{caption ?? (runs.length === 0 ? 'no runs yet' : `last ${runs.length} ${runs.length === 1 ? 'run' : 'runs'}`)}</Text>
+        <Text style={styles.hint}>drag to rotate · tap to reset · phase 1 → {shape.phases}</Text>
       </View>
     </FadeIn>
   );

@@ -29,7 +29,7 @@ export default function Cubes() {
       <Section label="tus cubos">
         {cubes === null ? <EmptyState text="…" /> : cubes.length === 0 ? <EmptyState text="Aún no has creado ningún cubo." /> :
           cubes.map(cube => <ActionRow key={cube.cubeId} label={cube.name} value="→"
-            detail={`${cube.phases} ${cube.phases === 1 ? 'fase' : 'fases'} · v${cube.version} · ${cube.runs} ${cube.runs === 1 ? 'run' : 'runs'}`}
+            detail={`${cube.openShares > 0 ? 'referencia · publicado · ' : ''}${cube.phases} ${cube.phases === 1 ? 'fase' : 'fases'} · v${cube.version} · ${cube.runs} ${cube.runs === 1 ? 'run' : 'runs'}${cube.participants > 0 ? ` · ${cube.participants} ${cube.participants === 1 ? 'participante' : 'participantes'}` : ''}`}
             onPress={() => router.push({ pathname: '/cube', params: { id: cube.cubeId } })} />)}
       </Section>
     </Screen>

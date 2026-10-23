@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { router } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { useAccount } from '../account/AccountProvider';
 import { errorMessage } from '../api/request';
@@ -8,7 +8,7 @@ import EmptyState from '../ui/EmptyState';
 import Screen from '../ui/Screen';
 import Section from '../ui/Section';
 import { color, font, inputChrome, space } from '../ui/theme';
-import { emptyDraft, toCube, type CubeDraft } from '../cubes/cubeForm';
+import { emptyDraft, fromCube, toCube, type CubeDraft } from '../cubes/cubeForm';
 
 function Field({ label, value, onChange, numeric, hint }: { label: string; value: string; onChange: (v: string) => void; numeric?: boolean; hint?: string }) {
   return <View style={styles.field}>
@@ -19,10 +19,17 @@ function Field({ label, value, onChange, numeric, hint }: { label: string; value
   </View>;
 }
 
-/** «Crear nuevo cubo»: un único formulario. Todas las fases usan el mismo ancho, alto y semántica. */
+/** «Crear nuevo cubo»: un único formulario. Todas las fases usan el mismo ancho, alto y semántica.
+ * Con `?id=`, edita ese cubo: guardar crea su versión siguiente y no toca las anteriores ni lo publicado. */
 export default function CubeNew() {
   const { api, model } = useAccount();
+  const { id } = useLocalSearchParams<{ id?: string }>();
   const [draft, setDraft] = useState<CubeDraft>(emptyDraft);
+  const [version, setVersion] = useState<number | null>(null);
+  useEffect(() => {
+    if (!id || !model.cubes) return;
+    api.cube(id).then(cube => { setDraft(fromCube(cube)); setVersion(cube.version); }, error => setNotice(errorMessage(error)));
+  }, [api, id, model.cubes]);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const back = () => router.canGoBack() ? router.back() : router.replace('/cubes');
@@ -33,14 +40,15 @@ export default function CubeNew() {
     if (!cube) { setNotice('Pon un nombre y que fases, ancho y alto estén entre 1 y 10.'); return; }
     setBusy(true); setNotice(null);
     try {
-      const created = await api.createCube(cube);
+      const created = id ? await api.newVersion(id, cube) : await api.createCube(cube);
       router.replace({ pathname: '/cube', params: { id: created.cubeId } });
     } catch (error) { setNotice(errorMessage(error)); setBusy(false); }
   }
 
-  if (!model.cubes) return <Screen title="nuevo cubo" onBack={back}><EmptyState text="Crear cubos es para admin y superiores." /></Screen>;
+  const title = id ? (version ? `editar · v${version + 1}` : 'editar') : 'nuevo cubo';
+  if (!model.cubes) return <Screen title={title} onBack={back}><EmptyState text="Crear cubos es para admin y superiores." /></Screen>;
   return (
-    <Screen title="nuevo cubo" onBack={back}>
+    <Screen title={title} onBack={back}>
       <Section>
         <Field label="Nombre" value={draft.name} onChange={name => set({ name })} hint="Decidir el stack" />
       </Section>
@@ -64,7 +72,8 @@ export default function CubeNew() {
       </Section>
       <Text style={styles.note}>Todas las fases usan esta misma cuadrícula.</Text>
       {notice && <EmptyState alert text={notice} />}
-      <ActionRow label="Crear cubo" value="→" busy={busy} onPress={() => void create()} />
+      {id && <Text style={styles.note}>Se guardará como versión nueva. Las runs y los enlaces de versiones anteriores no cambian.</Text>}
+      <ActionRow label={id ? 'Guardar versión nueva' : 'Crear cubo'} value="→" busy={busy || (!!id && version === null)} onPress={() => void create()} />
     </Screen>
   );
 }

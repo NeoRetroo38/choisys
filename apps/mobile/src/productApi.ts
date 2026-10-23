@@ -17,6 +17,8 @@ export function toUiError(error: unknown): UiError {
   switch (code) {
     case 'CONFIGURATION_ERROR':
       return { message: 'Falta configurar la conexión con choisys. Define EXPO_PUBLIC_API_URL con la dirección del API de producto y vuelve a cargar la app.', restart: false };
+    case 'SHARE_CLOSED':
+      return { message: 'Este enlace ya no admite respuestas.', restart: true };
     case 'NOT_FOUND':
     case 'CUBE_NOT_PLAYABLE':
       return { message: 'Este cubo no está disponible para jugar.', restart: true };
@@ -71,9 +73,12 @@ function readPhaseTransitions(value: unknown, phase: EvaluateRequest['phase']): 
 
 const sessionIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
+/** With `shareToken`, the same flow runs for a participant without an account: `/c/<token>/sessions|evaluate`,
+ * authorised by the participant token that `getToken` returns. */
 export function createProductClient(baseUrl: string | undefined, transport: typeof fetch = fetch, timeoutMs = 8000,
-  getToken: () => string | null = () => null) {
-  async function post(endpoint: '/sessions' | '/evaluate', payload: unknown): Promise<unknown> {
+  getToken: () => string | null = () => null, shareToken?: string) {
+  async function post(route: '/sessions' | '/evaluate', payload: unknown): Promise<unknown> {
+    const endpoint = shareToken ? `/c/${encodeURIComponent(shareToken)}${route}` : route;
     let url: URL;
     try {
       if (!baseUrl) throw new Error();
@@ -113,13 +118,13 @@ export function createProductClient(baseUrl: string | undefined, transport: type
   return {
     /** Sin cubeId, el cubo vanilla; con cubeId, un cubo propio con la forma que diga el servidor. */
     async startSession(cubeId?: string): Promise<StartSessionResponse> {
-      const scenarioId = cubeId ? 'custom' : 'choice-grid';
-      const body = await post('/sessions', cubeId ? { scenarioId, cubeId } : { scenarioId });
+      const scenarioId = cubeId || shareToken ? 'custom' : 'choice-grid';
+      const body = await post('/sessions', shareToken ? {} : cubeId ? { scenarioId, cubeId } : { scenarioId });
       if (!record(body) || !keys(body, ['ok', 'session']) || body.ok !== true || !record(body.session)) throw new ProductApiError('INVALID_RESPONSE');
       const session = body.session;
       const size = (value: unknown) => Number.isInteger(value) && (value as number) >= 1 && (value as number) <= 10;
       // Una API anterior no devuelve la forma: para el vanilla se sobreentiende 3×(3×3), así la web nueva no rompe con la API vieja.
-      const shape = session.shape ?? (cubeId ? undefined : VANILLA_SHAPE);
+      const shape = session.shape ?? (scenarioId === 'custom' ? undefined : VANILLA_SHAPE);
       if (!keys(session, session.shape === undefined ? ['sessionId', 'scenarioId', 'phase'] : ['sessionId', 'scenarioId', 'phase', 'shape']) ||
         typeof session.sessionId !== 'string' || !sessionIdPattern.test(session.sessionId) ||
         session.scenarioId !== scenarioId || session.phase !== 1 || !record(shape) || !keys(shape, ['phases', 'rows', 'columns']) ||
