@@ -7,6 +7,7 @@ import { ApiError } from '../errors.js';
 /** Límite actual del motor (neos-cube#20): hasta 10 fases de hasta 10×10. */
 export const MAX_DIMENSION = 10;
 const MAX_LABEL = 60;
+const MAX_DESCRIPTION = 600;
 const MAX_CUBES = 200;
 const MAX_RUNS = 500;
 
@@ -30,13 +31,20 @@ const exactKeys = (value: unknown, keys: string[]): Record<string, unknown> => {
 
 /** Valida la entrada de «Crear nuevo cubo». El alto y el ancho de cada fase salen del número de etiquetas. */
 export function cubeInput(body: unknown): CreateCubeRequest {
-  const root = exactKeys(body, ['name', 'phases']);
+  const optional = body && typeof body === 'object' && 'description' in body;
+  const root = exactKeys(body, optional ? ['name', 'phases', 'description'] : ['name', 'phases']);
   if (!Array.isArray(root.phases) || root.phases.length < 1 || root.phases.length > MAX_DIMENSION) throw new ApiError(400, 'INVALID_REQUEST');
   const phases = root.phases.map((phase): CubePhaseDefinition => {
     const item = exactKeys(phase, ['label', 'rows', 'columns']);
     return { label: text(item.label, MAX_LABEL), rows: labels(item.rows), columns: labels(item.columns) };
   });
-  return { name: text(root.name, 120), phases };
+  const cube = { name: text(root.name, 120), phases };
+  if (root.description === undefined) return cube;
+  if (typeof root.description !== 'string') throw new ApiError(400, 'INVALID_REQUEST');
+  const description = root.description.trim();
+  // Line breaks are allowed in a description; other control characters are not.
+  if (description.length > MAX_DESCRIPTION || /[\u0000-\u0009\u000b-\u001f\u007f]/.test(description)) throw new ApiError(400, 'INVALID_REQUEST');
+  return description ? { ...cube, description } : cube;
 }
 
 /** Forma jugable de una versión: todas las fases comparten filas × columnas (lo que dibuja la app). */
@@ -82,7 +90,7 @@ export class CubeService {
   async create(actor: AuthActor, input: CreateCubeRequest): Promise<CubeResponse> {
     requireCapability(actor, 'cubes.manage.own');
     const created = await this.db.cube.create({
-      data: { ownerProfileId: actor.profileId, name: input.name, versions: { create: { version: 1, phases: input.phases as unknown as object } } },
+      data: { ownerProfileId: actor.profileId, name: input.name, description: input.description ?? null, versions: { create: { version: 1, phases: input.phases as unknown as object } } },
       select: { id: true },
     });
     return this.get(actor, created.id);
@@ -99,7 +107,7 @@ export class CubeService {
     // shortcut: two simultaneous edits race on the unique (cube, version) and the second fails with 500; fine for one owner.
     await this.db.cube.update({
       where: { id: cubeId },
-      data: { name: input.name, versions: { create: { version: (cube.versions[0]?.version ?? 0) + 1, phases: input.phases as unknown as object } } },
+      data: { name: input.name, description: input.description ?? null, versions: { create: { version: (cube.versions[0]?.version ?? 0) + 1, phases: input.phases as unknown as object } } },
     });
     return this.get(actor, cubeId);
   }
@@ -108,7 +116,7 @@ export class CubeService {
     requireCapability(actor, 'cubes.manage.own');
     const cube = await this.db.cube.findFirst({
       where: { id: cubeId, ownerProfileId: actor.profileId },
-      select: { id: true, name: true, createdAt: true, versions: { orderBy: { version: 'desc' }, select: { id: true, version: true, phases: true } } },
+      select: { id: true, name: true, description: true, createdAt: true, versions: { orderBy: { version: 'desc' }, select: { id: true, version: true, phases: true } } },
     });
     // Un cubo ajeno responde igual que uno inexistente: no se revela que existe.
     if (!cube || cube.versions.length === 0) throw new ApiError(404, 'NOT_FOUND');
@@ -125,7 +133,7 @@ export class CubeService {
     });
     const latest = cube.versions[0];
     const detail: CubeDetail = {
-      cubeId: cube.id, name: cube.name, createdAt: cube.createdAt.toISOString(),
+      cubeId: cube.id, name: cube.name, description: cube.description, createdAt: cube.createdAt.toISOString(),
       version: latest.version, versionId: latest.id, phases: latest.phases as unknown as CubePhaseDefinition[],
       runs: runs.map(run => ({
         runId: run.id, startedAt: run.createdAt.toISOString(), status: run.status === 'COMPLETED' ? 'COMPLETED' : 'ABANDONED',

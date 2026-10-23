@@ -148,7 +148,7 @@ export class ShareService {
   /** What a person without an account may see before joining: the cube's name and grid. */
   async publicCube(token: string): Promise<PublicCubeResponse> {
     const share = await this.byToken(token);
-    return { ok: true, cube: { name: share.cubeVersion.cube.name, shape: uniformShape(share.cubeVersion.phases), open: share.closedAt === null } };
+    return { ok: true, cube: { name: share.cubeVersion.cube.name, description: share.cubeVersion.cube.description, shape: uniformShape(share.cubeVersion.phases), open: share.closedAt === null } };
   }
 
   async join(token: string, input: JoinShareRequest): Promise<JoinShareResponse> {
@@ -188,7 +188,7 @@ export class ShareService {
   private async byToken(token: string) {
     if (!TOKEN_PATTERN.test(token)) throw new ApiError(404, 'NOT_FOUND');
     const share = await this.db.cubeShare.findUnique({
-      where: { token }, select: { id: true, closedAt: true, cubeVersion: { select: { phases: true, cube: { select: { name: true } } } } },
+      where: { token }, select: { id: true, closedAt: true, cubeVersion: { select: { phases: true, cube: { select: { name: true, description: true } } } } },
     });
     if (!share) throw new ApiError(404, 'NOT_FOUND');
     return share;

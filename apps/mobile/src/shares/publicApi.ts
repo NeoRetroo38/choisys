@@ -25,7 +25,9 @@ export function createPublicApi(baseUrl: string | undefined, transport: ApiTrans
     async cube(link: string): Promise<PublicCube> {
       const data = await apiRequest(baseUrl, path(link), {}, transport);
       if (!record(data) || data.ok !== true || !record(data.cube) || typeof data.cube.name !== 'string' || typeof data.cube.open !== 'boolean') throw invalid();
-      return { name: data.cube.name, shape: readShape(data.cube.shape), open: data.cube.open };
+      const description = data.cube.description ?? null;
+      if (description !== null && typeof description !== 'string') throw invalid();
+      return { name: data.cube.name, description, shape: readShape(data.cube.shape), open: data.cube.open };
     },
     async join(link: string, displayName: string, email: string): Promise<string> {
       const body = email.trim() ? { displayName, email: email.trim() } : { displayName };

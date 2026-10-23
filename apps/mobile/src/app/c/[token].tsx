@@ -62,6 +62,7 @@ export default function SharedCube() {
         <Text style={styles.brand}>choisys</Text>
         {!cube ? (notice ? <Text accessibilityRole="alert" style={styles.notice}>{notice}</Text> : <ActivityIndicator color={color.current} />) : <>
           <Text accessibilityRole="header" style={styles.title}>{cube.name}</Text>
+          {cube.description && <Text style={styles.description}>{cube.description}</Text>}
           <Text style={styles.meta}>{cube.shape.phases} {cube.shape.phases === 1 ? 'fase' : 'fases'} · {cube.shape.columns} × {cube.shape.rows}</Text>
 
           {participant && result ? <>
@@ -102,6 +103,7 @@ const styles = StyleSheet.create({
   content: { width: '100%', maxWidth, alignSelf: 'center', paddingHorizontal: space.m },
   brand: { color: color.current, fontSize: 22, fontFamily: font.text, fontWeight: '400', letterSpacing: -0.6, marginBottom: space.xl },
   title: { color: color.current, fontSize: 34, fontFamily: font.text, fontWeight: '300', letterSpacing: -1 },
+  description: { color: '#d0d0d0', fontSize: 15, lineHeight: 23, fontFamily: font.text, fontWeight: '300', marginTop: space.s },
   meta: { color: '#8a8a8a', fontSize: 12, fontFamily: font.mono, marginTop: space.xs, marginBottom: space.l },
   lead: { color: color.current, fontSize: 17, lineHeight: 25, fontFamily: font.text, fontWeight: '300', marginBottom: space.l },
   copy: { color: '#8a8a8a', fontSize: 14, lineHeight: 21, fontFamily: font.text, marginVertical: space.m },

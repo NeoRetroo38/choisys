@@ -91,6 +91,16 @@ test('la entrada de «Crear nuevo cubo» respeta 1–10 y no admite campos de m�
   for (const body of bad) assert.throws(() => cubeInput(body), (e: { status?: number }) => e.status === 400, JSON.stringify(body).slice(0, 60));
 });
 
+test('la descripción es opcional, admite saltos de línea y nada más raro', () => {
+  const base = { name: 'X', phases: [phase('a', 1, 1)] };
+  assert.equal(cubeInput({ ...base, description: '  Puesto.\nRemoto. ' }).description, 'Puesto.\nRemoto.');
+  assert.equal('description' in cubeInput({ ...base, description: '   ' }), false);
+  assert.equal('description' in cubeInput(base), false);
+  for (const description of [1, null, 'x'.repeat(601), 'a\u0000b', 'a\tb']) {
+    assert.throws(() => cubeInput({ ...base, description }), (e: { status?: number }) => e.status === 400, String(description).slice(0, 20));
+  }
+});
+
 test('/cubes exige sesión iniciada', async () => {
   const { service } = fakeDb();
   const config = readConfig({ CHOISYS_LOCAL_API_TOKEN: 'x'.repeat(40) });
