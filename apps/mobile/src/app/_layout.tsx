@@ -30,11 +30,16 @@ function AuthenticatedRoutes() {
   </Stack>;
 }
 
+// The welcome is shown once per browser tab: a reload keeps the screen you were on. Web only; native starts fresh.
+const WELCOMED = 'choisys.welcomed';
+const seenWelcome = () => { try { return globalThis.sessionStorage?.getItem(WELCOMED) === '1'; } catch { return false; } };
+const rememberWelcome = () => { try { globalThis.sessionStorage?.setItem(WELCOMED, '1'); } catch { /* private mode: show it again */ } };
+
 export default function RootLayout() {
-  const [welcomed, setWelcomed] = useState(false);
+  const [welcomed, setWelcomed] = useState(seenWelcome);
   // A shared cube is opened by people without an account: no welcome, no sign-in, no account providers.
   if (usePathname().startsWith('/c/')) return <><StatusBar style="light" /><Slot /></>;
-  if (!welcomed) return <><StatusBar style="light" /><WelcomeScreen onContinue={() => setWelcomed(true)} /></>;
+  if (!welcomed) return <><StatusBar style="light" /><WelcomeScreen onContinue={() => { rememberWelcome(); setWelcomed(true); }} /></>;
   return <AuthProvider><AccountProvider><StatusBar style="dark" /><AuthenticatedRoutes /></AccountProvider></AuthProvider>;
 }
 const styles = StyleSheet.create({
