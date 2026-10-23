@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { CubeShape, EvaluateRequest, EvaluateResponse, Phase, PhaseTransitionTiming, ScenarioId, StartSessionRequest, StartSessionResponse } from '@scenarys/shared';
+import type { CubeShape, EvaluateRequest, EvaluateResponse, Measurement, Phase, PhaseTransitionTiming, ScenarioId, StartSessionRequest, StartSessionResponse } from '@scenarys/shared';
 import { ApiError } from './errors.js';
 import type { CubeClient } from './neoCubeClient.js';
 import type { RunRecorder } from './services/runRecorder.js';
@@ -8,6 +8,9 @@ const MAX_SESSIONS = 256;
 export const VANILLA_SHAPE: CubeShape = { phases: 3, rows: 3, columns: 3 };
 /** Forma y versión de un cubo propio de la persona; lanza 404 si no es suyo. */
 export type CubeShapeResolver = (profileId: string, cubeId: string) => Promise<{ shape: CubeShape; cubeVersionId: string }>;
+/** A session started for someone without an account (a shared-cube participant): the caller resolves the
+ * shape and decides where the completed Run is stored. */
+export interface SessionTarget { shape: CubeShape; onComplete: (measurements: Measurement[]) => Promise<void> }
 interface Session {
   scenarioId: ScenarioId;
   shape: CubeShape;
@@ -19,24 +22,27 @@ interface Session {
   phaseReadyAt?: number;
   phaseTransitions: PhaseTransitionTiming[];
   profileId?: string;
+  onComplete?: SessionTarget['onComplete'];
 }
 /** Product sessions are temporary engine state, scoped to an authenticated profile. */
 export class SessionService {
   private readonly sessions = new Map<string, Session>();
   constructor(private readonly cube: CubeClient, private readonly now: () => number = () => performance.now(), private readonly recorder?: RunRecorder,
     private readonly shapes?: CubeShapeResolver) {}
-  async start(input: StartSessionRequest, profileId?: string): Promise<StartSessionResponse> {
+  /** `profileId` is the account profile, or an opaque participant key when `target` is given. */
+  async start(input: StartSessionRequest, profileId?: string, target?: SessionTarget): Promise<StartSessionResponse> {
     for (const [id, session] of this.sessions) { if (!session.busy && session.expiresAt <= this.now()) this.sessions.delete(id); }
     if (this.sessions.size >= MAX_SESSIONS) throw new ApiError(503, 'SESSION_LIMIT_REACHED');
     let shape = VANILLA_SHAPE;
     let cubeVersionId: string | undefined;
-    if (input.scenarioId === 'custom') {
+    if (target) shape = target.shape;
+    else if (input.scenarioId === 'custom') {
       if (!profileId || !this.shapes) throw new ApiError(404, 'NOT_FOUND');
       ({ shape, cubeVersionId } = await this.shapes(profileId, input.cubeId));
     }
     const sessionId = randomUUID();
     this.sessions.set(sessionId, { scenarioId: input.scenarioId, shape, cubeVersionId,
-      expiresAt: this.now() + SESSION_TTL_MS, busy: false, completed: false, expectedPhase: 1, phaseTransitions: [], profileId });
+      expiresAt: this.now() + SESSION_TTL_MS, busy: false, completed: false, expectedPhase: 1, phaseTransitions: [], profileId, onComplete: target?.onComplete });
     return { ok: true, session: { sessionId, scenarioId: input.scenarioId, phase: 1, shape } };
   }
   async evaluate(input: EvaluateRequest, profileId?: string): Promise<EvaluateResponse> {
@@ -65,7 +71,9 @@ export class SessionService {
         } else {
           session.completed = true;
           // Saving the history must never fail the person's answer; the engine already accepted it.
-          if (profileId && response.result.measurements) await this.recorder?.recordCompleted(profileId, response.result.measurements, session.cubeVersionId).catch(() => undefined);
+          const measurements = response.result.measurements;
+          if (measurements && session.onComplete) await session.onComplete(measurements).catch(() => console.error('choisys-api: participant run not saved'));
+          else if (profileId && measurements) await this.recorder?.recordCompleted(profileId, measurements, session.cubeVersionId).catch(() => undefined);
         }
       }
       // A retry of phase N sees exactly the transitions that existed when phase N was first accepted.

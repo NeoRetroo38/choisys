@@ -1,6 +1,6 @@
 import type {
   AdminProfileResponse, AdminProfileRow, AdminProfilesResponse, DeleteMeResponse, ExportResponse, Measurement, MeProfile, MeResponse, Role,
-  CreateCubeRequest, CubeDetail, CubePhaseDefinition, CubeRun, CubeSummary,
+  CreateCubeRequest, CubeDetail, CubePhaseDefinition, CubeRun, CubeShareSummary, CubeSummary,
   RoleChangeRow, RoleChangesResponse, RunHistoryResponse, RunSummary, RequestedRole, RoleRequestStatus, RoleRequestSummary, AdminRoleRequestRow,
 } from '@scenarys/shared';
 import { ApiRequestError, apiRequest, type ApiTransport } from '../api/request';
@@ -88,7 +88,21 @@ const isLabels = (value: unknown): value is string[] => Array.isArray(value) && 
 function readCubeSummary(value: unknown): CubeSummary {
   if (!record(value) || !isText(value.cubeId) || !isText(value.name, 120) || !isCount(value.version, 1, 100_000) ||
       !isCount(value.phases, 0, 10) || !isCount(value.runs, 0, 1_000_000) || !isDate(value.createdAt)) throw invalid();
-  return { cubeId: value.cubeId, name: value.name, version: value.version, phases: value.phases, runs: value.runs, createdAt: value.createdAt };
+  // An API from before shared cubes omits the counts: nothing is shared there.
+  const openShares = value.openShares ?? 0, participants = value.participants ?? 0;
+  if (!isCount(openShares, 0, 100_000) || !isCount(participants, 0, 10_000_000)) throw invalid();
+  return { cubeId: value.cubeId, name: value.name, version: value.version, phases: value.phases, runs: value.runs, createdAt: value.createdAt,
+    openShares, participants };
+}
+
+const isToken = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9_-]{43}$/.test(value);
+
+function readShareSummary(value: unknown): CubeShareSummary {
+  if (!record(value) || !isText(value.shareId) || !isToken(value.token) || !isCount(value.version, 1, 100_000) ||
+      !(value.referenceRunId === null || isText(value.referenceRunId)) || typeof value.open !== 'boolean' || !isDate(value.createdAt) ||
+      !(value.closedAt === null || isDate(value.closedAt)) || !isCount(value.participants, 0, 10_000_000)) throw invalid();
+  return { shareId: value.shareId, token: value.token, version: value.version, referenceRunId: value.referenceRunId, open: value.open,
+    createdAt: value.createdAt, closedAt: value.closedAt, participants: value.participants };
 }
 
 function readPhases(value: unknown): CubePhaseDefinition[] {
@@ -115,8 +129,9 @@ function readCubeResponse(value: unknown): CubeDetail {
   const cube = value.cube;
   if (!isText(cube.cubeId) || !isText(cube.name, 120) || !isCount(cube.version, 1, 100_000) || !isText(cube.versionId) ||
       !isDate(cube.createdAt) || !Array.isArray(cube.runs)) throw invalid();
+  if (cube.shares !== undefined && !Array.isArray(cube.shares)) throw invalid();
   return { cubeId: cube.cubeId, name: cube.name, version: cube.version, versionId: cube.versionId, createdAt: cube.createdAt,
-    phases: readPhases(cube.phases), runs: cube.runs.map(readCubeRun) };
+    phases: readPhases(cube.phases), runs: cube.runs.map(readCubeRun), shares: (cube.shares ?? []).map(readShareSummary) };
 }
 
 /** Own-account and SUPERDEV endpoints (docs/ROLES.md). The server decides; this client reads and validates. */

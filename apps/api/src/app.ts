@@ -21,6 +21,8 @@ import type { RoleRequestService } from './services/roleRequestService.js';
 import { roleRequestRoutes } from './roleRequestRoutes.js';
 import { cubeRoutes } from './cubeRoutes.js';
 import type { CubeService } from './services/cubeService.js';
+import type { ShareService } from './services/shareService.js';
+import { shareRoutes } from './shareRoutes.js';
 export interface AppDependencies {
   auth?: AuthService | null;
   /** Test harness only. Runtime bootstrap always requires account authentication. */
@@ -33,6 +35,8 @@ export interface AppDependencies {
   me?: MeService;
   /** Own cubes for ADMIN and above (/cubes); absent without a database. */
   cubes?: CubeService;
+  /** Reference cubes shared by link (/cubes/:id/shares, public /c/:token); absent without a database. */
+  shares?: ShareService;
   /** Operator endpoints (/admin); absent without a database. */
   admin?: AdminService;
   /** Live list of connected clients (/admin/connections, /live). */
@@ -73,11 +77,13 @@ export function createApp(config: ApiConfig, cube: CubeClient = new NeoCubeClien
   app.use(express.json({ limit: '8kb', strict: true, inflate: false }));
   app.use(authRoutes(dependencies.auth ?? null));
   const shapes = dependencies.cubes ? dependencies.cubes.playable.bind(dependencies.cubes) : undefined;
-  app.use(productRoutes(new SessionService(cube, undefined, dependencies.runRecorder, shapes), dependencies.auth ?? null, dependencies.allowUnauthenticatedProduct === true, dependencies.productLimiter));
+  const sessions = new SessionService(cube, undefined, dependencies.runRecorder, shapes);
+  app.use(productRoutes(sessions, dependencies.auth ?? null, dependencies.allowUnauthenticatedProduct === true, dependencies.productLimiter));
+  if (dependencies.shares) app.use(shareRoutes(dependencies.shares, sessions, dependencies.productLimiter ?? new MeLimiter()));
   if (dependencies.me) app.use(meRoutes(dependencies.auth ?? null, dependencies.me, dependencies.productLimiter ?? new MeLimiter()));
   if (dependencies.connections) app.use(connectionRoutes(dependencies.auth ?? null, dependencies.connections, dependencies.productLimiter ?? new MeLimiter()));
   if (dependencies.system) app.use(systemRoutes(dependencies.auth ?? null, dependencies.system, dependencies.productLimiter ?? new MeLimiter()));
-  if (dependencies.cubes) app.use(cubeRoutes(dependencies.auth ?? null, dependencies.cubes, dependencies.productLimiter ?? new MeLimiter()));
+  if (dependencies.cubes) app.use(cubeRoutes(dependencies.auth ?? null, dependencies.cubes, dependencies.productLimiter ?? new MeLimiter(), dependencies.shares));
   if (dependencies.admin) app.use(adminRoutes(dependencies.auth ?? null, dependencies.admin, dependencies.productLimiter ?? new MeLimiter()));
   if (dependencies.roleRequests) app.use(roleRequestRoutes(dependencies.auth ?? null, dependencies.roleRequests,
     dependencies.productLimiter ?? new MeLimiter(), !dependencies.me));

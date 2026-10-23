@@ -52,7 +52,7 @@ export type ApiErrorCode =
   | 'SESSION_NOT_FOUND' | 'SESSION_LIMIT_REACHED' | 'SESSION_BUSY'
   | 'SESSION_CONFLICT' | 'FORBIDDEN' | 'ALREADY_DECIDED' | 'ROLE_REQUESTS_UNAVAILABLE'
   | 'NEO_CUBE_UNAVAILABLE' | 'NEO_CUBE_TIMEOUT'
-  | 'NEO_CUBE_INVALID_RESPONSE' | 'NEO_CUBE_AUTH_FAILED' | 'CUBE_NOT_PLAYABLE';
+  | 'NEO_CUBE_INVALID_RESPONSE' | 'NEO_CUBE_AUTH_FAILED' | 'CUBE_NOT_PLAYABLE' | 'SHARE_CLOSED';
 export interface ApiErrorResponse {
   ok: false;
   error: { code: ApiErrorCode; message: string };
@@ -117,8 +117,30 @@ export interface RoleChangesResponse { ok: true; changes: RoleChangeRow[] }
 /** Cubos de usuario (choisys#84). Semántica `var:string` por fase, fila y columna; 1–10 de cada. */
 export interface CubePhaseDefinition { label: string; rows: string[]; columns: string[] }
 export interface CreateCubeRequest { name: string; phases: CubePhaseDefinition[] }
-export interface CubeSummary { cubeId: string; name: string; version: number; phases: number; runs: number; createdAt: string }
+/** `openShares` > 0 means the cube is a published reference; `participants` counts people across all its links. */
+export interface CubeSummary { cubeId: string; name: string; version: number; phases: number; runs: number; createdAt: string; openShares: number; participants: number }
 export interface CubeRun extends RunSummary { hidden: boolean; version: number }
-export interface CubeDetail { cubeId: string; name: string; version: number; versionId: string; phases: CubePhaseDefinition[]; createdAt: string; runs: CubeRun[] }
+export interface CubeDetail { cubeId: string; name: string; version: number; versionId: string; phases: CubePhaseDefinition[]; createdAt: string; runs: CubeRun[]; shares: CubeShareSummary[] }
+
+/** Cubos de referencia compartidos (Mis cubos → compartir). The similarity is computed by the C++ engine, never by a client. */
+export interface PhaseSimilarity { phase: number; similarity: number }
+/** 0–100 with one decimal: proximity inside this cube's grid, not a measure of the person. */
+export interface Similarity { similarity: number; phases: PhaseSimilarity[] }
+/** A link pins one cube version and one completed run of the owner as the reference. */
+export interface CubeShareSummary { shareId: string; token: string; version: number; referenceRunId: string | null; open: boolean; createdAt: string; closedAt: string | null; participants: number }
+export interface CreateCubeShareRequest { referenceRunId: string }
+export interface ParticipantRun { runId: string; completedAt: string; measurements: Measurement[]; comparison: Similarity | null }
+/** `rank` orders participants by the similarity of their latest completed run; null until they complete one. */
+export interface ShareParticipant { participantId: string; displayName: string; email: string | null; joinedAt: string; rank: number | null; runs: ParticipantRun[] }
+export interface CubeShareDetail extends Omit<CubeShareSummary, 'participants'> { phases: CubePhaseDefinition[]; reference: Measurement[]; participants: ShareParticipant[] }
+export interface CubeShareResponse { ok: true; share: CubeShareDetail }
+
+/** Public, no account: only what a participant needs to play. No owner data, labels, reference or other people. */
+export interface PublicCube { name: string; shape: CubeShape; open: boolean }
+export interface PublicCubeResponse { ok: true; cube: PublicCube }
+export interface JoinShareRequest { displayName: string; email?: string }
+/** Shown once; the server keeps only its hash. */
+export interface JoinShareResponse { ok: true; participantToken: string }
+export interface ParticipantResultResponse { ok: true; displayName: string; shape: CubeShape; runs: { runId: string; completedAt: string; measurements: Measurement[] }[] }
 export interface CubeListResponse { ok: true; cubes: CubeSummary[] }
 export interface CubeResponse { ok: true; cube: CubeDetail }

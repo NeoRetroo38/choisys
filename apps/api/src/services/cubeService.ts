@@ -1,5 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
-import type { CreateCubeRequest, CubeDetail, CubeListResponse, CubePhaseDefinition, CubeResponse, Measurement } from '@scenarys/shared';
+import type { CreateCubeRequest, CubeDetail, CubeListResponse, CubePhaseDefinition, CubeResponse, CubeShape, Measurement } from '@scenarys/shared';
 import type { AuthActor } from '../authorization.js';
 import { requireCapability } from '../authorization.js';
 import { ApiError } from '../errors.js';
@@ -39,7 +39,15 @@ export function cubeInput(body: unknown): CreateCubeRequest {
   return { name: text(root.name, 120), phases };
 }
 
-const measurementsOf = (output: unknown): Measurement[] => {
+/** Forma jugable de una versión: todas las fases comparten filas × columnas (lo que dibuja la app). */
+export function uniformShape(stored: unknown): CubeShape {
+  const phases = stored as CubePhaseDefinition[];
+  const rows = phases[0]?.rows.length ?? 0, columns = phases[0]?.columns.length ?? 0;
+  if (!Array.isArray(phases) || !phases.length || phases.some(p => p.rows.length !== rows || p.columns.length !== columns)) throw new ApiError(409, 'CUBE_NOT_PLAYABLE');
+  return { phases: phases.length, rows, columns };
+}
+
+export const measurementsOf = (output: unknown): Measurement[] => {
   const list = output && typeof output === 'object' && 'measurements' in output ? (output as { measurements: unknown }).measurements : [];
   return Array.isArray(list) ? list as Measurement[] : [];
 };
@@ -53,14 +61,22 @@ export class CubeService {
     const rows = await this.db.cube.findMany({
       where: { ownerProfileId: actor.profileId }, orderBy: { createdAt: 'desc' }, take: MAX_CUBES,
       select: { id: true, name: true, createdAt: true,
-        versions: { orderBy: { version: 'desc' }, select: { version: true, phases: true, _count: { select: { runs: true } } } } },
+        versions: { orderBy: { version: 'desc' }, select: { version: true, phases: true,
+          // Solo las runs del dueño: las de participantes se cuentan aparte.
+          _count: { select: { runs: { where: { participantId: null } } } },
+          shares: { select: { closedAt: true, _count: { select: { participants: true } } } } } } },
     });
-    return { ok: true, cubes: rows.map(row => ({
-      cubeId: row.id, name: row.name, createdAt: row.createdAt.toISOString(),
-      version: row.versions[0]?.version ?? 1,
-      phases: Array.isArray(row.versions[0]?.phases) ? (row.versions[0].phases as unknown[]).length : 0,
-      runs: row.versions.reduce((total, version) => total + version._count.runs, 0),
-    })) };
+    return { ok: true, cubes: rows.map(row => {
+      const shares = row.versions.flatMap(version => version.shares);
+      return {
+        cubeId: row.id, name: row.name, createdAt: row.createdAt.toISOString(),
+        version: row.versions[0]?.version ?? 1,
+        phases: Array.isArray(row.versions[0]?.phases) ? (row.versions[0].phases as unknown[]).length : 0,
+        runs: row.versions.reduce((total, version) => total + version._count.runs, 0),
+        openShares: shares.filter(share => share.closedAt === null).length,
+        participants: shares.reduce((total, share) => total + share._count.participants, 0),
+      };
+    }) };
   }
 
   async create(actor: AuthActor, input: CreateCubeRequest): Promise<CubeResponse> {
@@ -70,6 +86,22 @@ export class CubeService {
       select: { id: true },
     });
     return this.get(actor, created.id);
+  }
+
+  /** Cambiar la estructura crea la versión siguiente; las anteriores, sus runs y sus enlaces no se tocan. */
+  async newVersion(actor: AuthActor, cubeId: string, input: CreateCubeRequest): Promise<CubeResponse> {
+    requireCapability(actor, 'cubes.manage.own');
+    const cube = await this.db.cube.findFirst({
+      where: { id: cubeId, ownerProfileId: actor.profileId },
+      select: { versions: { orderBy: { version: 'desc' }, take: 1, select: { version: true } } },
+    });
+    if (!cube) throw new ApiError(404, 'NOT_FOUND');
+    // shortcut: two simultaneous edits race on the unique (cube, version) and the second fails with 500; fine for one owner.
+    await this.db.cube.update({
+      where: { id: cubeId },
+      data: { name: input.name, versions: { create: { version: (cube.versions[0]?.version ?? 0) + 1, phases: input.phases as unknown as object } } },
+    });
+    return this.get(actor, cubeId);
   }
 
   async get(actor: AuthActor, cubeId: string): Promise<CubeResponse> {
@@ -86,6 +118,11 @@ export class CubeService {
       orderBy: { createdAt: 'desc' }, take: MAX_RUNS,
       select: { id: true, createdAt: true, status: true, outputData: true, hidden: true, cubeVersionId: true },
     });
+    const shares = await this.db.cubeShare.findMany({
+      where: { cubeVersion: { cubeId: cube.id } }, orderBy: { createdAt: 'desc' }, take: MAX_CUBES,
+      select: { id: true, token: true, referenceRunId: true, createdAt: true, closedAt: true,
+        cubeVersion: { select: { version: true } }, _count: { select: { participants: true } } },
+    });
     const latest = cube.versions[0];
     const detail: CubeDetail = {
       cubeId: cube.id, name: cube.name, createdAt: cube.createdAt.toISOString(),
@@ -93,6 +130,11 @@ export class CubeService {
       runs: runs.map(run => ({
         runId: run.id, startedAt: run.createdAt.toISOString(), status: run.status === 'COMPLETED' ? 'COMPLETED' : 'ABANDONED',
         measurements: measurementsOf(run.outputData), hidden: run.hidden, version: versionOf.get(run.cubeVersionId ?? '') ?? latest.version,
+      })),
+      shares: shares.map(share => ({
+        shareId: share.id, token: share.token, version: share.cubeVersion.version, referenceRunId: share.referenceRunId,
+        open: share.closedAt === null, createdAt: share.createdAt.toISOString(), closedAt: share.closedAt?.toISOString() ?? null,
+        participants: share._count.participants,
       })),
     };
     return { ok: true, cube: detail };
@@ -106,10 +148,7 @@ export class CubeService {
     });
     const latest = cube?.versions[0];
     if (!latest) throw new ApiError(404, 'NOT_FOUND');
-    const phases = latest.phases as unknown as CubePhaseDefinition[];
-    const rows = phases[0]?.rows.length ?? 0, columns = phases[0]?.columns.length ?? 0;
-    if (!phases.length || phases.some(p => p.rows.length !== rows || p.columns.length !== columns)) throw new ApiError(409, 'CUBE_NOT_PLAYABLE');
-    return { shape: { phases: phases.length, rows, columns }, cubeVersionId: latest.id };
+    return { shape: uniformShape(latest.phases), cubeVersionId: latest.id };
   }
 
   /** Ocultar no borra: la run sigue guardada y se puede volver a mostrar. */
