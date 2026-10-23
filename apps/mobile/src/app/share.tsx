@@ -10,6 +10,7 @@ import { linkFor } from '../shares/linkFor';
 import { participantRows, type ParticipantFilter, type ParticipantOrder } from '../shares/participants';
 import ActionRow from '../ui/ActionRow';
 import EmptyState from '../ui/EmptyState';
+import QrCode from '../ui/QrCode';
 import Screen from '../ui/Screen';
 import Section from '../ui/Section';
 import { color, font, space, tap } from '../ui/theme';
@@ -90,6 +91,7 @@ export default function Share() {
     <Screen title={`enlace · v${share.version}`} onBack={back}>
       {notice && <EmptyState alert text={notice} />}
       <Section>
+        {share.open && <View style={styles.qr}><QrCode value={url} size={168} /></View>}
         <Text selectable style={styles.url}>{url}</Text>
         <Text style={styles.meta}>{share.open ? 'abierto' : 'cerrado'} · {share.participants.length} {share.participants.length === 1 ? 'participante' : 'participantes'} · {completed} {completed === 1 ? 'completado' : 'completados'}</Text>
         <ActionRow label="Copiar enlace" value={copied ? 'copiado' : '⧉'} onPress={() => void copy()} />
@@ -120,6 +122,7 @@ export default function Share() {
 }
 
 const styles = StyleSheet.create({
+  qr: { alignSelf: 'flex-start', marginLeft: -12, marginBottom: space.s },
   url: { fontSize: 13, lineHeight: 19, color: color.ink, fontFamily: font.mono, marginBottom: space.xs },
   meta: { fontSize: 12, color: color.muted, fontFamily: font.mono, marginBottom: space.s },
   note: { fontSize: 12, lineHeight: 18, color: color.muted, fontFamily: font.text, marginBottom: space.s },
