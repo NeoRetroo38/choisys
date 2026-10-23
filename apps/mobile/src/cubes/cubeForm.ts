@@ -31,3 +31,13 @@ export function toCube(draft: CubeDraft): { name: string; phases: CubePhaseDefin
     phases: Array.from({ length: phases }, (_, i) => ({ label: `${label} ${i + 1}`.slice(0, 60), columns: [...columns], rows: [...rows] })),
   };
 }
+
+/** The form filled from an existing version, to edit it into the next one. Labels come back exactly as stored. */
+export function fromCube(cube: { name: string; phases: CubePhaseDefinition[] }): CubeDraft {
+  const first = cube.phases[0];
+  return {
+    name: cube.name, phases: String(cube.phases.length), phaseLabel: (first?.label ?? 'fase:string').replace(/ 1$/, ''),
+    width: String(first?.columns.length ?? 3), columns: first?.columns.join(', ') ?? '',
+    height: String(first?.rows.length ?? 3), rows: first?.rows.join(', ') ?? '',
+  };
+}

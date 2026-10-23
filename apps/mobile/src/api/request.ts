@@ -66,6 +66,7 @@ export function errorMessage(error: unknown): string {
     case 'FORBIDDEN': return 'Tu cuenta no tiene permiso para esto.';
     case 'INVALID_CREDENTIALS': return 'La contraseña no es correcta.';
     case 'NOT_FOUND': return 'Esta parte aún no está disponible en el servidor.';
+    case 'SHARE_CLOSED': return 'Este enlace ya no admite respuestas.';
     case 'ROLE_REQUESTS_UNAVAILABLE': return 'Las solicitudes de rol no están disponibles. Puedes registrarte como usuario.';
     case 'ALREADY_DECIDED': return 'Esta solicitud ya se resolvió. Actualiza la lista.';
     case 'SESSION_CONFLICT': return 'El perfil cambió durante la petición. Actualiza y vuelve a intentarlo.';

@@ -1,6 +1,6 @@
 import type {
   AdminProfileResponse, AdminProfileRow, AdminProfilesResponse, DeleteMeResponse, ExportResponse, Measurement, MeProfile, MeResponse, Role,
-  CreateCubeRequest, CubeDetail, CubePhaseDefinition, CubeRun, CubeShareSummary, CubeSummary,
+  CreateCubeRequest, CubeDetail, CubePhaseDefinition, CubeRun, CubeShareDetail, CubeShareSummary, CubeSummary, ShareParticipant, Similarity,
   RoleChangeRow, RoleChangesResponse, RunHistoryResponse, RunSummary, RequestedRole, RoleRequestStatus, RoleRequestSummary, AdminRoleRequestRow,
 } from '@scenarys/shared';
 import { ApiRequestError, apiRequest, type ApiTransport } from '../api/request';
@@ -134,6 +134,40 @@ function readCubeResponse(value: unknown): CubeDetail {
     phases: readPhases(cube.phases), runs: cube.runs.map(readCubeRun), shares: (cube.shares ?? []).map(readShareSummary) };
 }
 
+const isPercent = (value: unknown): value is number => typeof value === 'number' && value >= 0 && value <= 100;
+/** 1–10 per axis: a cube of any shape up to 10×10×10. */
+function readCubeMeasurements(value: unknown): Measurement[] {
+  if (!Array.isArray(value) || value.length > 10) throw invalid();
+  return value.map(item => {
+    if (!record(item) || !isCount(item.phase, 1, 10) || !isCount(item.row, 1, 10) || !isCount(item.column, 1, 10)) throw invalid();
+    return { phase: item.phase, row: item.row, column: item.column } as unknown as Measurement;
+  });
+}
+/** The engine's numbers, shown as received; the app never derives a similarity. */
+function readSimilarity(value: unknown): Similarity | null {
+  if (value === null) return null;
+  if (!record(value) || !isPercent(value.similarity) || !Array.isArray(value.phases)) throw invalid();
+  return { similarity: value.similarity, phases: value.phases.map(item => {
+    if (!record(item) || !isCount(item.phase, 1, 10) || !isPercent(item.similarity)) throw invalid();
+    return { phase: item.phase, similarity: item.similarity };
+  }) };
+}
+function readParticipant(value: unknown): ShareParticipant {
+  if (!record(value) || !isText(value.participantId) || !isText(value.displayName, 120) || !(value.email === null || isText(value.email, 320)) ||
+      !isDate(value.joinedAt) || !(value.rank === null || isCount(value.rank, 1, 100_000)) || !Array.isArray(value.runs)) throw invalid();
+  return { participantId: value.participantId, displayName: value.displayName, email: value.email, joinedAt: value.joinedAt, rank: value.rank,
+    runs: value.runs.map(run => {
+      if (!record(run) || !isText(run.runId) || !isDate(run.completedAt)) throw invalid();
+      return { runId: run.runId, completedAt: run.completedAt, measurements: readCubeMeasurements(run.measurements), comparison: readSimilarity(run.comparison) };
+    }) };
+}
+export function readShareResponse(value: unknown): CubeShareDetail {
+  if (!record(value) || value.ok !== true || !record(value.share) || !Array.isArray(value.share.participants)) throw invalid();
+  const share = value.share, people = value.share.participants as unknown[];
+  const { participants: _count, ...summary } = readShareSummary({ ...share, participants: people.length });
+  return { ...summary, phases: readPhases(share.phases), reference: readCubeMeasurements(share.reference), participants: people.map(readParticipant) };
+}
+
 /** Own-account and SUPERDEV endpoints (docs/ROLES.md). The server decides; this client reads and validates. */
 export const adminPaths = { profiles: '/admin/profiles', roleChanges: '/admin/role-changes', roleRequests: '/admin/role-requests' } as const;
 
@@ -178,6 +212,20 @@ export function createAccountApi(baseUrl: string | undefined, getToken: () => st
     },
     async createCube(input: CreateCubeRequest): Promise<CubeDetail> { return readCubeResponse(await call('/cubes', input, 1_000_000)); },
     async cube(cubeId: string): Promise<CubeDetail> { return readCubeResponse(await call(`/cubes/${encodeURIComponent(cubeId)}`, undefined, 1_000_000)); },
+    /** Cambiar la estructura crea la versión siguiente; lo publicado sigue en la suya. */
+    async newVersion(cubeId: string, input: CreateCubeRequest): Promise<CubeDetail> {
+      return readCubeResponse(await call(`/cubes/${encodeURIComponent(cubeId)}/versions`, input, 1_000_000));
+    },
+    async createShare(cubeId: string, referenceRunId: string): Promise<CubeShareDetail> {
+      return readShareResponse(await call(`/cubes/${encodeURIComponent(cubeId)}/shares`, { referenceRunId }, 2_000_000));
+    },
+    async share(cubeId: string, shareId: string): Promise<CubeShareDetail> {
+      return readShareResponse(await call(`/cubes/${encodeURIComponent(cubeId)}/shares/${encodeURIComponent(shareId)}`, undefined, 2_000_000, 20000));
+    },
+    /** Cerrar no borra resultados: solo impide nuevas respuestas. */
+    async closeShare(cubeId: string, shareId: string): Promise<CubeShareDetail> {
+      return readShareResponse(await call(`/cubes/${encodeURIComponent(cubeId)}/shares/${encodeURIComponent(shareId)}/close`, {}, 2_000_000));
+    },
     /** Ocultar no borra: el servidor guarda la run y la puede volver a mostrar. */
     async setRunHidden(cubeId: string, runId: string, hidden: boolean): Promise<CubeDetail> {
       return readCubeResponse(await call(`/cubes/${encodeURIComponent(cubeId)}/runs/${encodeURIComponent(runId)}/visibility`, { hidden }, 1_000_000));

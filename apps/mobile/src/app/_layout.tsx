@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Stack } from 'expo-router';
+import { Slot, Stack, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { AccountProvider } from '../account/AccountProvider';
@@ -22,7 +22,7 @@ function AuthenticatedRoutes() {
   return <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#ffffff' }, animation: 'fade' }}>
     <Stack.Protected guard={state.status === 'signedIn'}>
       <Stack.Screen name="index" /><Stack.Screen name="account" /><Stack.Screen name="system" />
-      <Stack.Screen name="cubes" /><Stack.Screen name="cube-new" /><Stack.Screen name="cube" /><Stack.Screen name="play" />
+      <Stack.Screen name="cubes" /><Stack.Screen name="cube-new" /><Stack.Screen name="cube" /><Stack.Screen name="play" /><Stack.Screen name="share" />
     </Stack.Protected>
     <Stack.Protected guard={state.status === 'signedOut'}>
       <Stack.Screen name="sign-in" /><Stack.Screen name="register" />
@@ -32,6 +32,8 @@ function AuthenticatedRoutes() {
 
 export default function RootLayout() {
   const [welcomed, setWelcomed] = useState(false);
+  // A shared cube is opened by people without an account: no welcome, no sign-in, no account providers.
+  if (usePathname().startsWith('/c/')) return <><StatusBar style="light" /><Slot /></>;
   if (!welcomed) return <><StatusBar style="light" /><WelcomeScreen onContinue={() => setWelcomed(true)} /></>;
   return <AuthProvider><AccountProvider><StatusBar style="dark" /><AuthenticatedRoutes /></AccountProvider></AuthProvider>;
 }
