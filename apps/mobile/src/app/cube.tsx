@@ -5,6 +5,8 @@ import type { CubeDetail } from '@scenarys/shared';
 import { useAccount } from '../account/AccountProvider';
 import { errorMessage } from '../api/request';
 import ActionRow from '../ui/ActionRow';
+import CubeFlow from '../ui/CubeFlow';
+import PhaseGrid from '../ui/PhaseGrid';
 import EmptyState from '../ui/EmptyState';
 import Screen from '../ui/Screen';
 import Section from '../ui/Section';
@@ -18,6 +20,7 @@ export default function Cube() {
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmArchive, setConfirmArchive] = useState(false);
+  const [allPhases, setAllPhases] = useState(false);
   const back = () => router.canGoBack() ? router.back() : router.replace('/cubes');
   useFocusEffect(useCallback(() => {
     if (!model.cubes || !id) return;
@@ -50,10 +53,18 @@ export default function Cube() {
   if (!cube) return <Screen title="cubo" onBack={back}><EmptyState alert={!!notice} text={notice ?? '…'} /></Screen>;
   const reference = cube.runs.find(run => run.status === 'COMPLETED' && run.version === cube.version && run.measurements.length === cube.phases.length);
   const openShares = cube.shares.filter(share => share.open).length;
+  const steps = [
+    { label: 'creado', done: true },
+    { label: 'jugado', done: !!reference },
+    { label: 'publicado', done: openShares > 0 },
+    { label: 'respuestas', done: cube.shares.some(share => share.participants > 0) },
+  ];
+  const visiblePhases = allPhases || cube.phases.length <= 3 ? cube.phases : cube.phases.slice(0, 2);
   return (
     <Screen title={cube.name} onBack={back}>
       {notice && <EmptyState alert text={notice} />}
       {cube.description && <Text style={styles.description}>{cube.description}</Text>}
+      <CubeFlow steps={steps} />
       <Text style={styles.meta}>v{cube.version} · {cube.phases.length} {cube.phases.length === 1 ? 'fase' : 'fases'}{cube.archived ? ' · archivado' : openShares > 0 ? ' · referencia publicada' : ''}</Text>
       <Section>
         <ActionRow label="Jugar este cubo" value="→" onPress={() => router.push({ pathname: '/play', params: { cube: cube.cubeId } })} />
@@ -70,16 +81,10 @@ export default function Cube() {
           value={`${share.participants} ${share.participants === 1 ? 'participante' : 'participantes'} →`}
           onPress={() => router.push({ pathname: '/share', params: { cube: cube.cubeId, id: share.shareId } })} />)}
       </Section>
-      {cube.phases.map((phase, index) => <Section key={index} label={`fase ${index + 1} · ${phase.label}`}>
-        <Text style={styles.shape}>{phase.columns.length} × {phase.rows.length}</Text>
-        <View style={styles.grid}>
-          {phase.rows.map((_, row) => <View key={row} style={styles.gridRow}>
-            {phase.columns.map((__, column) => <View key={column} style={styles.cell} />)}
-          </View>)}
-        </View>
-        <Text style={styles.axis}>columnas: {phase.columns.join(' · ')}</Text>
-        <Text style={styles.axis}>filas: {phase.rows.join(' · ')}</Text>
+      {visiblePhases.map((phase, index) => <Section key={index} label={`fase ${index + 1} · ${phase.label.replace(/:string( \d+)?$/, '$1')}`}>
+        <PhaseGrid phase={phase} chosen={reference?.measurements[index]} />
       </Section>)}
+      {visiblePhases.length < cube.phases.length && <ActionRow label={`Ver las ${cube.phases.length} fases`} value="↓" onPress={() => setAllPhases(true)} />}
       <Section>
         <ActionRow label={cube.archived ? 'Desarchivar' : confirmArchive ? 'Pulsa otra vez para archivar' : 'Archivar cubo'} busy={busy === 'archive'}
           tone={cube.archived ? 'default' : 'danger'} onPress={() => void archive()}
@@ -97,13 +102,7 @@ export default function Cube() {
   );
 }
 
-const cellSize = 14;
 const styles = StyleSheet.create({
   description: { fontSize: 15, lineHeight: 23, color: color.ink, fontFamily: font.text, fontWeight: '300', marginBottom: space.s },
   meta: { fontSize: 12, color: color.muted, fontFamily: font.mono, marginBottom: space.m },
-  shape: { fontSize: 13, color: color.ink, fontFamily: font.mono, marginBottom: space.xs },
-  grid: { alignSelf: 'flex-start', gap: 3, marginBottom: space.s },
-  gridRow: { flexDirection: 'row', gap: 3 },
-  cell: { width: cellSize, height: cellSize, borderWidth: 1, borderColor: color.ink },
-  axis: { fontSize: 12, lineHeight: 18, color: color.muted, fontFamily: font.text },
 });
