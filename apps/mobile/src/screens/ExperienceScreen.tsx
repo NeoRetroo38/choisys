@@ -1,5 +1,5 @@
 import { useEffect, useReducer, useRef, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { AccessibilityInfo, ActivityIndicator, Animated, Easing, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { EvaluateRequest, Position } from '@scenarys/shared';
 import { createProductClient, isAuthenticationError, toUiError } from '../productApi';
@@ -79,6 +79,14 @@ export default function ExperienceScreen({ client, onSignOut, onAccount, onUnaut
     }
   }
 
+  // Phase-to-phase motion: the matrix leaves to the left and the next one arrives from the right.
+  const [leave] = useState(() => new Animated.Value(0));
+  const [calm, setCalm] = useState(false);
+  useEffect(() => { void AccessibilityInfo.isReduceMotionEnabled().then(setCalm); }, []);
+  useEffect(() => { leave.setValue(0); }, [leave, state.phase, state.screen]);
+  const leaving = { opacity: leave.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
+    transform: [{ translateX: leave.interpolate({ inputRange: [0, 1], outputRange: [0, calm ? 0 : -36] }) }] };
+
   async function send(request: EvaluateRequest) {
     if (inFlight.current || state.error?.restart) return;
     inFlight.current = true;
@@ -87,8 +95,10 @@ export default function ExperienceScreen({ client, onSignOut, onAccount, onUnaut
       const response = await client.evaluate(request, state.shape);
       // «Ver mi cubo» es el cubo vanilla; las runs de un cubo propio se ven en su ficha.
       if (!cubeId && response.result.measurements) remember(response.result.measurements as RunMeasurements);
-      // Let the pop finish before the next phase fades in.
-      await new Promise(resolve => setTimeout(resolve, 260));
+      // Let the pop finish, then slide the matrix out before the next phase slides in.
+      await new Promise(resolve => setTimeout(resolve, 140));
+      await new Promise(resolve => Animated.timing(leave, { toValue: 1, duration: 240, easing: Easing.in(Easing.cubic),
+        useNativeDriver: Platform.OS !== 'web' }).start(() => resolve(undefined)));
       playSound(response.result.status === 'completed' ? 'complete' : 'phase');
       dispatch({ type: 'received', result: response.result });
     } catch (error) {
@@ -156,7 +166,8 @@ export default function ExperienceScreen({ client, onSignOut, onAccount, onUnaut
           {viewCube}
         </FadeIn>}
 
-        {state.screen === 'phase' && <FadeIn key={`phase-${state.phase}`} style={[styles.phase, { paddingTop: Math.max(38, height * 0.16 - insets.top) }]}>
+        {state.screen === 'phase' && <FadeIn key={`phase-${state.phase}`} fromX={calm ? 0 : 36} offset={calm ? 14 : 0} style={[styles.phase, { paddingTop: Math.max(38, height * 0.16 - insets.top) }]}>
+          <Animated.View style={leaving}>
           <Text key={state.phase} accessibilityRole="header" accessibilityLiveRegion="polite"
             accessibilityLabel={`Fase ${state.phase} de ${phases}. Elige un círculo.`}
             style={[styles.phaseTitle, { fontSize: canvasWidth * 0.091, marginLeft: canvasWidth * 0.139 }]}>
@@ -172,6 +183,7 @@ export default function ExperienceScreen({ client, onSignOut, onAccount, onUnaut
                 onPress={() => choose(position)} />)}
             </View>)}
           </View>
+          </Animated.View>
 
           <View style={[styles.phaseActions, { marginTop: canvasWidth * 0.11 }]}>
             {state.busy && <ActivityIndicator color="#000000" size="small" />}
