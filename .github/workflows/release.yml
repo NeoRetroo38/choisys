@@ -29,7 +29,6 @@ jobs:
         with: { node-version: 22, cache: npm }
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 17 }
-      - uses: android-actions/setup-android@v3
       - run: npm ci --no-audit --no-fund
       - name: Versión
         working-directory: apps/mobile
