@@ -1,10 +1,5 @@
--- Cubos de referencia compartidos por enlace. Aditiva: no borra ni reescribe filas existentes.
--- cube_data.profile_id pasa a admitir NULL solo para las runs de participantes sin cuenta; todas las filas
--- existentes conservan su perfil y la restricción CHECK garantiza un único dueño por fila.
-
--- AlterTable
-ALTER TABLE "cube_data" ALTER COLUMN "profile_id" DROP NOT NULL,
-ADD COLUMN     "participant_id" UUID;
+-- Cubos de referencia compartidos por enlace. Solo crea tablas, índices y claves foráneas: no toca
+-- ninguna tabla ni fila existente. Las runs de participantes sin cuenta viven en su propia tabla.
 
 -- CreateTable
 CREATE TABLE "cube_shares" (
@@ -30,8 +25,17 @@ CREATE TABLE "cube_participants" (
     CONSTRAINT "cube_participants_pkey" PRIMARY KEY ("id")
 );
 
--- CreateIndex
-CREATE INDEX "cube_data_participant_id_idx" ON "cube_data"("participant_id");
+-- CreateTable
+CREATE TABLE "cube_participant_runs" (
+    "id" UUID NOT NULL,
+    "participant_id" UUID NOT NULL,
+    "cube_version_id" UUID NOT NULL,
+    "output_data" JSONB NOT NULL,
+    "inference_data" JSONB,
+    "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "cube_participant_runs_pkey" PRIMARY KEY ("id")
+);
 
 -- CreateIndex
 CREATE UNIQUE INDEX "cube_shares_token_key" ON "cube_shares"("token");
@@ -45,8 +49,11 @@ CREATE UNIQUE INDEX "cube_participants_token_hash_key" ON "cube_participants"("t
 -- CreateIndex
 CREATE INDEX "cube_participants_share_id_idx" ON "cube_participants"("share_id");
 
--- AddForeignKey
-ALTER TABLE "cube_data" ADD CONSTRAINT "cube_data_participant_id_fkey" FOREIGN KEY ("participant_id") REFERENCES "cube_participants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+-- CreateIndex
+CREATE INDEX "cube_participant_runs_participant_id_created_at_idx" ON "cube_participant_runs"("participant_id", "created_at");
+
+-- CreateIndex
+CREATE INDEX "cube_participant_runs_cube_version_id_idx" ON "cube_participant_runs"("cube_version_id");
 
 -- AddForeignKey
 ALTER TABLE "cube_shares" ADD CONSTRAINT "cube_shares_cube_version_id_fkey" FOREIGN KEY ("cube_version_id") REFERENCES "cube_versions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -57,5 +64,8 @@ ALTER TABLE "cube_shares" ADD CONSTRAINT "cube_shares_reference_run_id_fkey" FOR
 -- AddForeignKey
 ALTER TABLE "cube_participants" ADD CONSTRAINT "cube_participants_share_id_fkey" FOREIGN KEY ("share_id") REFERENCES "cube_shares"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
--- Exactly one owner per row: an account profile or a participant. Prisma does not model CHECK constraints.
-ALTER TABLE "cube_data" ADD CONSTRAINT "cube_data_one_owner" CHECK (("profile_id" IS NULL) <> ("participant_id" IS NULL));
+-- AddForeignKey
+ALTER TABLE "cube_participant_runs" ADD CONSTRAINT "cube_participant_runs_participant_id_fkey" FOREIGN KEY ("participant_id") REFERENCES "cube_participants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "cube_participant_runs" ADD CONSTRAINT "cube_participant_runs_cube_version_id_fkey" FOREIGN KEY ("cube_version_id") REFERENCES "cube_versions"("id") ON DELETE CASCADE ON UPDATE CASCADE;

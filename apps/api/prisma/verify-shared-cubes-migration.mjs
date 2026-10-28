@@ -1,5 +1,6 @@
 // Applies every migration in order to an in-memory PostgreSQL (PGlite), with data created BEFORE the
 // shared-cubes migration, and checks that nothing existing is lost and the new invariants hold.
+// The shared-cubes migration only creates tables (required by the PC deploy guard): cube_data is untouched.
 // No database server is needed and no repository file is changed. Run from the repository root:
 //   npm install --no-save @electric-sql/pglite
 //   node apps/api/prisma/verify-shared-cubes-migration.mjs
@@ -34,9 +35,8 @@ await db.query(`INSERT INTO cube_data (id, profile_id, type, status, output_data
 
 // 2. The new migration keeps that data untouched.
 await apply(target);
-const legacy = await db.query('SELECT profile_id, participant_id, output_data FROM cube_data WHERE id = $1', [runId]);
+const legacy = await db.query('SELECT profile_id, output_data FROM cube_data WHERE id = $1', [runId]);
 assert.equal(legacy.rows[0].profile_id, profileId);
-assert.equal(legacy.rows[0].participant_id, null);
 assert.deepEqual(legacy.rows[0].output_data, { measurements: [{ phase: 1, row: 1, column: 1 }] });
 ok('existing run keeps its owner and data');
 
@@ -44,19 +44,18 @@ ok('existing run keeps its owner and data');
 const shareId = randomUUID(), participantId = randomUUID(), participantRun = randomUUID();
 await db.query('INSERT INTO cube_shares (id, cube_version_id, reference_run_id, token) VALUES ($1, $2, $3, $4)', [shareId, versionId, runId, 'x'.repeat(43)]);
 await db.query('INSERT INTO cube_participants (id, share_id, display_name, token_hash) VALUES ($1, $2, $3, $4)', [participantId, shareId, 'Ana', 'h'.repeat(64)]);
-await db.query(`INSERT INTO cube_data (id, participant_id, type, status, engine_version, scenario_version, cube_version_id, updated_at)
-  VALUES ($1, $2, 'RUN', 'COMPLETED', '0.1.0', 'custom', $3, $4)`, [participantRun, participantId, versionId, now]);
+await db.query('INSERT INTO cube_participant_runs (id, participant_id, cube_version_id, output_data) VALUES ($1, $2, $3, $4)',
+  [participantRun, participantId, versionId, JSON.stringify({ measurements: [{ phase: 1, row: 1, column: 1 }] })]);
 ok('participant run without an account');
 
-await rejects('row with no owner', `INSERT INTO cube_data (id, type, engine_version, scenario_version, updated_at) VALUES ($1, 'RUN', '0.1.0', 'custom', $2)`, [randomUUID(), now]);
-await rejects('row with two owners', `INSERT INTO cube_data (id, profile_id, participant_id, type, engine_version, scenario_version, updated_at)
-  VALUES ($1, $2, $3, 'RUN', '0.1.0', 'custom', $4)`, [randomUUID(), profileId, participantId, now]);
+await rejects('account run without a profile (cube_data unchanged)', `INSERT INTO cube_data (id, type, engine_version, scenario_version, updated_at) VALUES ($1, 'RUN', '0.1.0', 'custom', $2)`, [randomUUID(), now]);
+await rejects('participant run without engine output', 'INSERT INTO cube_participant_runs (id, participant_id, cube_version_id) VALUES ($1, $2, $3)', [randomUUID(), participantId, versionId]);
 await rejects('duplicate share token', 'INSERT INTO cube_shares (id, cube_version_id, reference_run_id, token) VALUES ($1, $2, $3, $4)', [randomUUID(), versionId, runId, 'x'.repeat(43)]);
 await rejects('duplicate participant token hash', 'INSERT INTO cube_participants (id, share_id, display_name, token_hash) VALUES ($1, $2, $3, $4)', [randomUUID(), shareId, 'B', 'h'.repeat(64)]);
 
 // 4. Closing is an update, never a delete: results stay.
 await db.query('UPDATE cube_shares SET closed_at = now() WHERE id = $1', [shareId]);
-assert.equal((await db.query('SELECT count(*)::int AS n FROM cube_data WHERE participant_id = $1', [participantId])).rows[0].n, 1);
+assert.equal((await db.query('SELECT count(*)::int AS n FROM cube_participant_runs WHERE participant_id = $1', [participantId])).rows[0].n, 1);
 ok('closing a share keeps participant results');
 
 // 5. A reference run that disappears never takes participants with it.
@@ -71,7 +70,7 @@ ok('deleting a reference run keeps the share and its participants');
 
 // 6. Deleting the owner's account removes everything that hangs from it, in one statement.
 await db.query('DELETE FROM accounts WHERE id = $1', [accountId]);
-for (const table of ['profiles', 'cubes', 'cube_versions', 'cube_shares', 'cube_participants', 'cube_data']) {
+for (const table of ['profiles', 'cubes', 'cube_versions', 'cube_shares', 'cube_participants', 'cube_participant_runs', 'cube_data']) {
   assert.equal((await db.query(`SELECT count(*)::int AS n FROM ${table}`)).rows[0].n, 0, table);
 }
 ok('account deletion cascades to shares, participants and their runs');

@@ -159,7 +159,7 @@ test('shared reference cube: owner publishes, people without an account answer, 
 
     // 9–12. Compared once, at completion time, against this link's reference, and stored with the run.
     assert.equal(engine.compared, 2);
-    const stored = await db.cubeData.findMany({ where: { participant: { shareId } }, select: { inferenceData: true } });
+    const stored = await db.cubeParticipantRun.findMany({ where: { participant: { shareId } }, select: { inferenceData: true } });
     assert.equal(stored.length, 2);
     assert.ok(stored.every(row => (row.inferenceData as any).comparison.referenceRunId === referenceRunId));
 
