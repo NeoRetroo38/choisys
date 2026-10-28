@@ -16,7 +16,8 @@ export default function Screen({ title, onBack, children }: ScreenProps) {
   const insets = useSafeAreaInsets();
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={[styles.content, { paddingTop: insets.top + space.m, paddingBottom: insets.bottom + space.xl }]}>
-      <FadeIn>
+      {/* Chained entrance: the header arrives first and the content follows it. */}
+      <FadeIn duration={280} offset={10}>
         <View style={styles.top}>
           {onBack && <Pressable accessibilityRole="button" accessibilityLabel="Volver" onPress={onBack} hitSlop={12}
             style={({ pressed }) => [styles.back, pressed && styles.pressed]}>
@@ -24,6 +25,8 @@ export default function Screen({ title, onBack, children }: ScreenProps) {
           </Pressable>}
           <Text accessibilityRole="header" style={styles.title}>{title}</Text>
         </View>
+      </FadeIn>
+      <FadeIn delay={80} duration={360} offset={18}>
         {children}
       </FadeIn>
     </ScrollView>
