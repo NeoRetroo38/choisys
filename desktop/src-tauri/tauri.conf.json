@@ -1,0 +1,17 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "choisys",
+  "version": "0.1.0",
+  "identifier": "com.scenarys.choisys",
+  "build": { "frontendDist": "../../apps/mobile/dist" },
+  "app": {
+    "windows": [{ "title": "choisys", "width": 440, "height": 880, "minWidth": 360, "minHeight": 640, "backgroundColor": "#ffffff" }],
+    "security": { "csp": null }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "publisher": "Scenarys S.L.",
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"]
+  }
+}
