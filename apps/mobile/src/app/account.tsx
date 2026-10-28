@@ -88,6 +88,10 @@ export default function Account() {
           detail={`último ${new Date(runs[0].startedAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}`} />}
       </Section>}
 
+      <Section label="aspecto">
+        <ActionRow label="Estilo del cubo" value="→" detail="Color y un emoji para cada fase" onPress={() => router.push('/cube-style')} />
+      </Section>
+
       {model.cubes && <Section label="cubos">
         <ActionRow label="Mis cubos" value="→" detail="Crea cubos con tus fases, filas y columnas" onPress={() => router.push('/cubes')} />
       </Section>}
