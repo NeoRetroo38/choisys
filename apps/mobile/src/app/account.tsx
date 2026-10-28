@@ -10,6 +10,9 @@ import { CONTACT_PHONE, useCopyPhone } from '../contact';
 import { useAuth } from '../auth/AuthProvider';
 import type { RunMeasurements } from '../history/runHistory';
 import CubeView from '../screens/CubeView';
+import { maxRunsShown } from '../cube/cubePrefs';
+import { useCubePrefs } from '../cube/useCubePrefs';
+import RunsBar from '../ui/RunsBar';
 import ActionRow from '../ui/ActionRow';
 import EmptyState from '../ui/EmptyState';
 import ProfileHeader from '../ui/ProfileHeader';
@@ -23,6 +26,7 @@ export default function Account() {
   const { controller } = useAuth();
   const { width } = useWindowDimensions();
   const [runs, setRuns] = useState<RunSummary[] | null>(null);
+  const [cubePrefs, updateCubePrefs] = useCubePrefs();
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<'export' | 'delete' | null>(null);
   const [password, setPassword] = useState<string | null>(null);
@@ -52,8 +56,9 @@ export default function Account() {
   }
 
   // Oldest first, as CubeView draws the last one as the current Run.
-  const completed: RunMeasurements[] = (runs ?? []).filter(run => run.status === 'COMPLETED' && run.measurements.length === 3)
-    .map(run => run.measurements).reverse().slice(-5);
+  const allCompleted: RunMeasurements[] = (runs ?? []).filter(run => run.status === 'COMPLETED' && run.measurements.length === 3)
+    .map(run => run.measurements).reverse();
+  const completed = allCompleted.slice(-cubePrefs.runsShown);
 
   async function exportData() {
     setBusy('export'); setNotice(null);
@@ -83,7 +88,9 @@ export default function Account() {
 
       {model.account.history && <Section label="tu cubo">
         {runs === null ? <EmptyState text="…" /> : completed.length === 0 ? <EmptyState text="Aún no has completado ningún Run." /> :
-          <View style={styles.cube}><CubeView runs={completed} size={Math.min(width - space.m * 2, 420)} /></View>}
+          <View style={styles.cube}><CubeView runs={completed} size={Math.min(width - space.m * 2, 420)} />
+            <RunsBar value={cubePrefs.runsShown} max={maxRunsShown} available={allCompleted.length} accent={cubePrefs.accent}
+              onChange={runsShown => updateCubePrefs({ runsShown })} /></View>}
         {runs !== null && runs.length > 0 && <ActionRow label="Runs" value={String(runs.length)}
           detail={`último ${new Date(runs[0].startedAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}`} />}
       </Section>}

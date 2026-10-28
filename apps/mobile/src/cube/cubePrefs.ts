@@ -29,8 +29,10 @@ export const emojiChoices = [
 ] as const;
 
 /** `accent` is a #rrggbb colour (older saves stored a preset name; they are converted on read). */
-export interface CubePrefs { accent: string; phaseEmojis: string[] }
-export const defaultPrefs: CubePrefs = { accent: accents.neon, phaseEmojis: [] };
+export interface CubePrefs { accent: string; phaseEmojis: string[]; runsShown: number }
+export const defaultPrefs: CubePrefs = { accent: accents.neon, phaseEmojis: [], runsShown: 5 };
+/** How many recent runs the cube draws. 10 for everyone for now; Pro will unlock more. */
+export const maxRunsShown = 10;
 export const maxPhases = 10;
 
 /** Accepts only known accents and emojis from the catalogue; anything else falls back to the default. */
@@ -45,7 +47,9 @@ export function parsePrefs(raw: string | null): CubePrefs {
     const phaseEmojis = Array.isArray(value.phaseEmojis)
       ? value.phaseEmojis.slice(0, maxPhases).map(item => typeof item === 'string' && allowed.has(item) ? item : '')
       : [];
-    return { accent, phaseEmojis };
+    const runs = Number(value.runsShown);
+    const runsShown = Number.isInteger(runs) && runs >= 1 && runs <= maxRunsShown ? runs : defaultPrefs.runsShown;
+    return { accent, phaseEmojis, runsShown };
   } catch {
     return defaultPrefs;
   }
