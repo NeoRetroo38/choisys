@@ -2,7 +2,7 @@ import { createCubeEdges } from '@neoretroo38/neo-cube-web';
 import type { Vec3 } from '@neoretroo38/neo-cube-web';
 import type { CubeShape } from '@scenarys/shared';
 import { useEffect, useState } from 'react';
-import { PanResponder, Platform, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, PanResponder, Platform, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, G, Line, Polyline, Text as SvgText } from 'react-native-svg';
 import type { RunMeasurements } from '../history/runHistory';
 import FadeIn from './FadeIn';
@@ -80,6 +80,17 @@ const axes: Array<{ name: string; dir: Vec; label: string }> = [
   { name: 'z', dir: [0, 0, 1], label: 'z phase' },
 ];
 
+/** The first `reach` segments of a path (fractional = part of the next one). Drawing only. */
+function partialPath(points: Array<[number, number]>, reach: number): Array<[number, number]> {
+  if (reach >= points.length - 1) return points;
+  const whole = Math.floor(reach), part = reach - whole;
+  const out = points.slice(0, whole + 1);
+  const [ax, ay] = points[whole], [bx, by] = points[whole + 1];
+  if (part > 0) out.push([ax + (bx - ax) * part, ay + (by - ay) * part]);
+  return out;
+}
+const drawMs = 900;
+
 function scaleVec(dir: Vec, amount: number): Vec { return [dir[0] * amount, dir[1] * amount, dir[2] * amount]; }
 
 /** Draws the received observations only: x = column, y = row, z = phase. Drag to rotate, tap to reset. */
@@ -87,6 +98,25 @@ export default function CubeView({ runs, size, shape = VANILLA, caption }: CubeV
   const [prefs] = useCubePrefs();
   const green = accents[prefs.accent];
   const gridEdges = latticeEdges(shape);
+  // The latest Run draws itself point by point when it changes (instant if the user asked for less motion).
+  const latestKey = JSON.stringify(runs[runs.length - 1] ?? []);
+  const [drawn, setDrawn] = useState(1);
+  useEffect(() => {
+    let frame = 0, cancelled = false;
+    void AccessibilityInfo.isReduceMotionEnabled().then(reduce => {
+      if (cancelled) return;
+      if (reduce) { setDrawn(1); return; }
+      const start = Date.now();
+      setDrawn(0);
+      const step = () => {
+        const t = Math.min(1, (Date.now() - start) / drawMs);
+        setDrawn(1 - Math.pow(1 - t, 3));
+        if (t < 1) frame = requestAnimationFrame(step);
+      };
+      frame = requestAnimationFrame(step);
+    });
+    return () => { cancelled = true; cancelAnimationFrame(frame); };
+  }, [latestKey]);
   const xs = levels(shape.columns), ys = levels(shape.rows), zs = levels(shape.phases);
   const [view, setView] = useState(defaultView);
   // Gesture bookkeeping lives in one stable object that only the gesture handlers touch (no ref reads during render).
@@ -178,13 +208,14 @@ export default function CubeView({ runs, size, shape = VANILLA, caption }: CubeV
             const latest = index === runs.length - 1;
             const opacity = latest ? 1 : 0.45;
             const points = run.map(item => point(item.row, item.column, item.phase));
-            const path = points.map(([x, y]) => `${x},${y}`).join(' ');
+            const reach = latest ? drawn * Math.max(points.length - 1, 0) : Infinity;
+            const path = (latest ? partialPath(points, reach) : points).map(([x, y]) => `${x},${y}`).join(' ');
             return <G key={index}>
               {/* The latest Run (line, points and numbers) is bright white with a soft halo; older Runs are red. */}
               {latest && <Polyline points={path} fill="none" stroke="#ffffff" strokeOpacity={0.22} strokeWidth={7} strokeLinejoin="round" strokeLinecap="round" />}
               <Polyline points={path} fill="none" stroke={latest ? '#ffffff' : red} strokeOpacity={opacity}
                 strokeWidth={latest ? 2.4 : 1.5} strokeLinejoin="round" strokeLinecap="round" />
-              {points.map(([x, y], pointIndex) => <G key={pointIndex}>
+              {points.map(([x, y], pointIndex) => pointIndex > reach + 1e-6 ? null : <G key={pointIndex}>
                 {latest && <Circle cx={x} cy={y} r={9} fill="#ffffff" fillOpacity={0.22} />}
                 <Circle cx={x} cy={y} r={latest ? 5 : 4} fill={latest ? '#ffffff' : red} fillOpacity={opacity} />
                 {latest && <SvgText x={x + 8} y={y + 14} fill="#ffffff" fontSize={11} fontFamily={mono}>{`${pointIndex + 1}`}</SvgText>}
