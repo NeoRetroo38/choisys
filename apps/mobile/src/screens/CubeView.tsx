@@ -6,6 +6,8 @@ import { PanResponder, Platform, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, G, Line, Polyline, Text as SvgText } from 'react-native-svg';
 import type { RunMeasurements } from '../history/runHistory';
 import FadeIn from './FadeIn';
+import { accents, phaseLabel } from '../cube/cubePrefs';
+import { useCubePrefs } from '../cube/useCubePrefs';
 
 interface CubeViewProps {
   runs: RunMeasurements[];
@@ -17,7 +19,6 @@ interface CubeViewProps {
 }
 const VANILLA: CubeShape = { phases: 3, rows: 3, columns: 3 };
 
-const green = '#39ff14';
 // Experiment: axes in neon green; past Runs (lines and points) in red.
 const red = '#ff2a2a';
 const mono = Platform.select({ ios: 'Menlo', default: 'monospace' });
@@ -83,6 +84,8 @@ function scaleVec(dir: Vec, amount: number): Vec { return [dir[0] * amount, dir[
 
 /** Draws the received observations only: x = column, y = row, z = phase. Drag to rotate, tap to reset. */
 export default function CubeView({ runs, size, shape = VANILLA, caption }: CubeViewProps) {
+  const [prefs] = useCubePrefs();
+  const green = accents[prefs.accent];
   const gridEdges = latticeEdges(shape);
   const xs = levels(shape.columns), ys = levels(shape.rows), zs = levels(shape.phases);
   const [view, setView] = useState(defaultView);
@@ -166,7 +169,7 @@ export default function CubeView({ runs, size, shape = VANILLA, caption }: CubeV
             const [tx, ty] = project([0, 0, z]);
             return <G key={phase}>
               <Circle cx={tx} cy={ty} r={2.6} fill={green} />
-              <SvgText x={tx + 8} y={ty - 6} fill={green} fontSize={11} fontFamily={mono}>{`f${phase}`}</SvgText>
+              <SvgText x={tx + 8} y={ty - 6} fill={green} fontSize={prefs.phaseEmojis[index] ? 15 : 11} fontFamily={prefs.phaseEmojis[index] ? undefined : mono}>{phaseLabel(prefs, phase)}</SvgText>
             </G>;
           })}
           <Circle cx={center} cy={center} r={3} fill={green} />
@@ -189,7 +192,7 @@ export default function CubeView({ runs, size, shape = VANILLA, caption }: CubeV
             </G>;
           })}
         </Svg>
-        <Text style={styles.caption}>{caption ?? (runs.length === 0 ? 'no runs yet' : `last ${runs.length} ${runs.length === 1 ? 'run' : 'runs'}`)}</Text>
+        <Text style={[styles.caption, { color: green }]}>{caption ?? (runs.length === 0 ? 'no runs yet' : `last ${runs.length} ${runs.length === 1 ? 'run' : 'runs'}`)}</Text>
         <Text style={styles.hint}>drag to rotate · tap to reset · phase 1 → {shape.phases}</Text>
       </View>
     </FadeIn>
@@ -197,6 +200,6 @@ export default function CubeView({ runs, size, shape = VANILLA, caption }: CubeV
 }
 
 const styles = StyleSheet.create({
-  caption: { color: green, fontFamily: mono, fontSize: 13, textAlign: 'center', marginTop: 8 },
+  caption: { fontFamily: mono, fontSize: 13, textAlign: 'center', marginTop: 8 },
   hint: { color: '#8a8a8a', fontFamily: mono, fontSize: 11, textAlign: 'center', marginTop: 6 },
 });
