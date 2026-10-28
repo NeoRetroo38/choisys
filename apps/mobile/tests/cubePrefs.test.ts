@@ -25,3 +25,8 @@ test('colour bar hues round-trip', () => {
   for (const hue of [0, 110, 200, 290]) assert.ok(Math.abs((hexToHue(hueToHex(hue)) ?? -99) - hue) <= 2, String(hue));
   assert.equal(hexToHue('#ffffff'), null);
 });
+
+test('runs shown stays between 1 and 10', () => {
+  assert.equal(parsePrefs(JSON.stringify({ runsShown: 8 })).runsShown, 8);
+  for (const bad of [0, 11, 2.5, 'x']) assert.equal(parsePrefs(JSON.stringify({ runsShown: bad })).runsShown, 5);
+});
