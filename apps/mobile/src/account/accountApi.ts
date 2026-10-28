@@ -130,7 +130,10 @@ function readCubeResponse(value: unknown): CubeDetail {
   if (!isText(cube.cubeId) || !isText(cube.name, 120) || !isCount(cube.version, 1, 100_000) || !isText(cube.versionId) ||
       !isDate(cube.createdAt) || !Array.isArray(cube.runs)) throw invalid();
   if (cube.shares !== undefined && !Array.isArray(cube.shares)) throw invalid();
-  return { cubeId: cube.cubeId, name: cube.name, version: cube.version, versionId: cube.versionId, createdAt: cube.createdAt,
+  // An API from before descriptions omits the field.
+  const description = cube.description ?? null;
+  if (description !== null && !isText(description, 600)) throw invalid();
+  return { cubeId: cube.cubeId, name: cube.name, description, version: cube.version, versionId: cube.versionId, createdAt: cube.createdAt,
     phases: readPhases(cube.phases), runs: cube.runs.map(readCubeRun), shares: (cube.shares ?? []).map(readShareSummary) };
 }
 

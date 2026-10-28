@@ -111,7 +111,7 @@ test('shared reference cube: owner publishes, people without an account answer, 
     const user = await account('user', 'USER');
 
     // 1–2. Create a cube (version 1) and play it: that run will be the reference.
-    const created = await call('/cubes', { name: 'Diseñador de producto', phases: [grid(3), grid(3)] }, owner);
+    const created = await call('/cubes', { name: 'Diseñador de producto', description: 'Puesto de producto.\nRemoto.', phases: [grid(3), grid(3)] }, owner);
     assert.equal(created.status, 201);
     const cubeId = created.body.cube.cubeId as string;
     assert.equal(created.body.cube.version, 1);
@@ -135,7 +135,8 @@ test('shared reference cube: owner publishes, people without an account answer, 
     // 5. Open the link without an account: name and grid only.
     const open = await call(`/c/${token}`);
     assert.equal(open.status, 200);
-    assert.deepEqual(open.body, { ok: true, cube: { name: 'Diseñador de producto', shape: { phases: 2, rows: 3, columns: 3 }, open: true } });
+    assert.deepEqual(open.body, { ok: true, cube: { name: 'Diseñador de producto', description: 'Puesto de producto.\nRemoto.',
+      shape: { phases: 2, rows: 3, columns: 3 }, open: true } });
     assert.equal((await call(`/c/${randomBytes(32).toString('base64url')}`)).status, 404);
     assert.equal((await call('/c/short')).status, 404);
 

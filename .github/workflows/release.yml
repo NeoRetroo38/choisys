@@ -1,0 +1,104 @@
+name: Release
+# PR: compila para comprobar que todo sigue construyendo (sin publicar).
+# Manual (Actions → Release → Run workflow, o publicar-version-choisys.command en el Mac):
+# compila, firma y publica una versión en GitHub Releases.
+on:
+  pull_request:
+    paths: ['apps/mobile/**', 'packages/**', 'desktop/**', 'package-lock.json', '.github/workflows/release.yml']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Versión, p. ej. 0.1.0'
+        required: true
+permissions:
+  contents: write
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  VERSION: ${{ inputs.version || '0.0.0' }}
+  PUBLISH: ${{ github.event_name == 'workflow_dispatch' }}
+  EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL || 'https://api.invalid' }}
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - run: npm ci --no-audit --no-fund
+      - name: Versión
+        working-directory: apps/mobile
+        run: |
+          node -e "const f='app.json',j=require('./'+f);j.expo.version=process.env.VERSION;j.expo.android.versionCode=Number(process.env.GITHUB_RUN_NUMBER);require('fs').writeFileSync(f,JSON.stringify(j,null,2))"
+      - name: Proyecto nativo
+        working-directory: apps/mobile
+        run: CI=1 npx expo prebuild --platform android --no-install
+      - name: Clave de firma
+        if: env.PUBLISH == 'true'
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          [ -n "$KEYSTORE_B64" ] || { echo '::error::Falta ANDROID_KEYSTORE_BASE64: ejecuta firmar-android.command en el Mac'; exit 1; }
+          [ "$EXPO_PUBLIC_API_URL" != 'https://api.invalid' ] || { echo '::error::Falta la variable EXPO_PUBLIC_API_URL'; exit 1; }
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/choisys.jks"
+      - name: Compilar APK
+        working-directory: apps/mobile/android
+        env:
+          STORE_PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PW: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          sign=()
+          if [ -f "$RUNNER_TEMP/choisys.jks" ]; then
+            sign=(-Pandroid.injected.signing.store.file="$RUNNER_TEMP/choisys.jks"
+                  -Pandroid.injected.signing.store.password="$STORE_PW"
+                  -Pandroid.injected.signing.key.alias="$KEY_ALIAS"
+                  -Pandroid.injected.signing.key.password="$KEY_PW")
+          fi
+          ./gradlew assembleRelease --no-daemon "${sign[@]}"
+          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/choisys-android.apk"
+      - uses: actions/upload-artifact@v4
+        with: { name: choisys-android, path: choisys-android.apk, retention-days: 7 }
+
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run: { shell: bash }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: desktop/src-tauri }
+      - run: npm ci --no-audit --no-fund
+      - name: Build web
+        working-directory: apps/mobile
+        run: npx expo export -p web --output-dir dist
+      - name: Instalador
+        working-directory: desktop
+        run: |
+          npx --yes @tauri-apps/cli@2 icon ../apps/mobile/assets/icon.png
+          npx --yes @tauri-apps/cli@2 build --bundles nsis --config "{\"version\":\"$VERSION\"}"
+          cp src-tauri/target/release/bundle/nsis/*.exe "$GITHUB_WORKSPACE/choisys-windows-setup.exe"
+      - uses: actions/upload-artifact@v4
+        with: { name: choisys-windows, path: choisys-windows-setup.exe, retention-days: 7 }
+
+  publish:
+    if: github.event_name == 'workflow_dispatch'
+    needs: [android, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: out, merge-multiple: true }
+      - name: Publicar en GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd out && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+          gh release create "v$VERSION" * -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "choisys $VERSION" \
+            --notes "Descarga gratuita de choisys. Por ahora solo funciona en los dispositivos de la red privada de Scenarys: la API aún no es pública. Comprueba la huella con SHA256SUMS.txt."
