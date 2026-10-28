@@ -10,6 +10,9 @@ on:
       version:
         description: 'Versión, p. ej. 0.1.0'
         required: true
+      api_url:
+        description: 'URL HTTPS de la API (vacío = variable EXPO_PUBLIC_API_URL)'
+        required: false
 permissions:
   contents: write
 concurrency:
@@ -18,7 +21,7 @@ concurrency:
 env:
   VERSION: ${{ inputs.version || '0.0.0' }}
   PUBLISH: ${{ github.event_name == 'workflow_dispatch' }}
-  EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL || 'https://api.invalid' }}
+  EXPO_PUBLIC_API_URL: ${{ inputs.api_url || vars.EXPO_PUBLIC_API_URL || 'https://api.invalid' }}
 
 jobs:
   android:
@@ -42,9 +45,15 @@ jobs:
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
-          [ -n "$KEYSTORE_B64" ] || { echo '::error::Falta ANDROID_KEYSTORE_BASE64: ejecuta firmar-android.command en el Mac'; exit 1; }
-          [ "$EXPO_PUBLIC_API_URL" != 'https://api.invalid' ] || { echo '::error::Falta la variable EXPO_PUBLIC_API_URL'; exit 1; }
-          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/choisys.jks"
+          [ "$EXPO_PUBLIC_API_URL" != 'https://api.invalid' ] || { echo '::error::Falta la URL de la API (input api_url o variable EXPO_PUBLIC_API_URL)'; exit 1; }
+          if [ -z "$KEYSTORE_B64" ]; then
+            # Sin clave definitiva: APK firmado con la clave de prueba de Gradle. Se instala, pero no se podrá
+            # actualizar encima cuando llegue la clave definitiva (habrá que desinstalarlo una vez).
+            echo '::warning::Sin ANDROID_KEYSTORE_BASE64: APK firmado con clave de prueba'
+            echo 'TEST_KEY=1' >> "$GITHUB_ENV"
+          else
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/choisys.jks"
+          fi
       - name: Compilar APK
         working-directory: apps/mobile/android
         env:
@@ -61,8 +70,12 @@ jobs:
           fi
           ./gradlew assembleRelease --no-daemon "${sign[@]}"
           cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/choisys-android.apk"
+      - name: Aviso de clave de prueba
+        if: env.TEST_KEY == '1'
+        run: |
+          echo 'Firmado con clave de prueba. Al pasar a la clave definitiva hay que desinstalar la app una vez.' > android-clave-de-prueba.txt
       - uses: actions/upload-artifact@v4
-        with: { name: choisys-android, path: choisys-android.apk, retention-days: 7 }
+        with: { name: choisys-android, path: "choisys-android.apk\nandroid-clave-de-prueba.txt", if-no-files-found: warn, retention-days: 7 }
 
   windows:
     runs-on: windows-latest
@@ -99,6 +112,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cd out && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+          cd out
+          note=''
+          if [ -f android-clave-de-prueba.txt ]; then note=' El APK de esta versión usa una clave de prueba: al llegar la definitiva habrá que desinstalarlo una vez.'; rm android-clave-de-prueba.txt; fi
+          sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
           gh release create "v$VERSION" * -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "choisys $VERSION" \
-            --notes "Descarga gratuita de choisys. Por ahora solo funciona en los dispositivos de la red privada de Scenarys: la API aún no es pública. Comprueba la huella con SHA256SUMS.txt."
+            --notes "Descarga gratuita de choisys. Por ahora solo funciona en los dispositivos de la red privada de Scenarys: la API aún no es pública. Comprueba la huella con SHA256SUMS.txt.$note"
