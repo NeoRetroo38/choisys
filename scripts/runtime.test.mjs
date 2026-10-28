@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
-import { exactOrigin, isTailscaleIPv4, runtimeConfig, tailscaleDnsNames } from './lib/runtime.mjs';
+import { exactOrigin, isTailscaleIPv4, runtimeConfig, tailscaleDnsNames, APP_ORIGINS } from './lib/runtime.mjs';
 
 test('private HTTPS URLs survive launcher configuration without changing the local bind or adding HTTP CORS', () => {
   const config = runtimeConfig({ host: '127.0.0.1', dnsNames: ['machine.example.test', 'machine'], env: {
@@ -10,11 +10,11 @@ test('private HTTPS URLs survive launcher configuration without changing the loc
   } });
   assert.equal(config.host, '127.0.0.1');
   assert.equal(config.apiUrl, 'https://api.example.test:8443');
-  assert.deepEqual(config.allowedOrigins, ['https://app.example.test:9444', 'https://portal.example.test']);
+  assert.deepEqual(config.allowedOrigins, ['https://app.example.test:9444', 'https://portal.example.test', ...APP_ORIGINS]);
 });
 
 test('loopback and LAN defaults remain usable, while public and malformed binds are rejected', () => {
-  assert.deepEqual(runtimeConfig({ host: '127.0.0.1', env: {} }).allowedOrigins, ['http://localhost:8081', 'http://127.0.0.1:8081']);
+  assert.deepEqual(runtimeConfig({ host: '127.0.0.1', env: {} }).allowedOrigins, ['http://localhost:8081', 'http://127.0.0.1:8081', ...APP_ORIGINS]);
   assert.equal(runtimeConfig({ host: '192.168.1.20', env: {} }).apiUrl, 'http://192.168.1.20:3000');
   for (const host of ['0.0.0.0', '8.8.8.8', 'localhost', '100.128.1.1', '100.64.1.999', '10.2e1.0.1']) {
     assert.throws(() => runtimeConfig({ host, env: {} }));
@@ -62,7 +62,7 @@ test('portable launcher dry-run preserves HTTPS configuration and needs no servi
   const config = JSON.parse(result.stdout);
   assert.equal(config.host, '127.0.0.1');
   assert.equal(config.apiUrl, 'https://api.example.test');
-  assert.deepEqual(config.allowedOrigins, ['https://app.example.test']);
+  assert.deepEqual(config.allowedOrigins, ['https://app.example.test', ...APP_ORIGINS]);
 });
 
 test('read-only database CLI rejects missing or malformed configuration without revealing inputs', () => {

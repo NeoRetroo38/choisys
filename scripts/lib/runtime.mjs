@@ -11,6 +11,10 @@ export function isTailscaleIPv4(address) {
 }
 
 /** Reject paths, credentials, wildcards and silent URL normalization. Errors contain no input values. */
+/** Origins of every choisys client besides the dev web: the Windows app (Tauri) and the public web at /choisys.
+ *  Native Android/iOS send no Origin. Always allowed, so one API serves all versions at once. */
+export const APP_ORIGINS = ['http://tauri.localhost', 'https://tauri.localhost', 'https://neowebdevsolutions.com'];
+
 export function exactOrigin(value, name = 'origin', api = false) {
   try {
     const url = new URL(value);
@@ -62,6 +66,6 @@ export function runtimeConfig({ host, apiPort = 3000, webPort = 8081, env = proc
     `http://localhost:${webPort}`, `http://${host}:${webPort}`,
     ...dnsNames.map(name => exactOrigin(`http://${name}:${webPort}`, 'Tailscale DNS origin')),
   ];
-  const allowedOrigins = [...new Set([webOrigin, ...explicit, ...defaults])];
+  const allowedOrigins = [...new Set([webOrigin, ...explicit, ...defaults, ...APP_ORIGINS])];
   return { host, apiPort, webPort, apiUrl, webOrigin, allowedOrigins, dnsNames };
 }
