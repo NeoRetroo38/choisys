@@ -17,7 +17,7 @@ const phase = (label: string, rows: number, columns: number) => ({
 /** Fake de Prisma con lo justo para CubeService: cubos, versiones y runs en memoria. */
 function fakeDb() {
   const state = {
-    cubes: [] as { id: string; ownerProfileId: string; name: string; createdAt: Date }[],
+    cubes: [] as { id: string; ownerProfileId: string; name: string; createdAt: Date; archivedAt: Date | null }[],
     versions: [] as { id: string; cubeId: string; version: number; phases: unknown }[],
     runs: [] as { id: string; profileId: string; type: string; status: string; createdAt: Date; outputData: unknown; hidden: boolean; cubeVersionId: string | null }[],
   };
@@ -27,7 +27,7 @@ function fakeDb() {
   const db = {
     cube: {
       create: async ({ data }: { data: { ownerProfileId: string; name: string; versions: { create: { version: number; phases: unknown } } } }) => {
-        const cube = { id: uid(), ownerProfileId: data.ownerProfileId, name: data.name, createdAt: day };
+        const cube = { id: uid(), ownerProfileId: data.ownerProfileId, name: data.name, createdAt: day, archivedAt: null };
         state.cubes.push(cube);
         state.versions.push({ id: uid(), cubeId: cube.id, ...data.versions.create });
         return { id: cube.id };

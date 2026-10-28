@@ -79,8 +79,9 @@ export class ShareService {
   async create(actor: AuthActor, cubeId: string, referenceRunId: string): Promise<CubeShareResponse> {
     requireCapability(actor, 'cubes.manage.own');
     const run = await this.db.cubeData.findFirst({
+      // An archived cube publishes nothing new.
       where: { id: referenceRunId, profileId: actor.profileId, type: 'RUN', status: 'COMPLETED',
-        cubeVersion: { cubeId, cube: { ownerProfileId: actor.profileId } } },
+        cubeVersion: { cubeId, cube: { ownerProfileId: actor.profileId, archivedAt: null } } },
       select: { outputData: true, cubeVersionId: true, cubeVersion: { select: { phases: true, _count: { select: { shares: true } } } } },
     });
     if (!run?.cubeVersionId || !run.cubeVersion) throw new ApiError(404, 'NOT_FOUND');

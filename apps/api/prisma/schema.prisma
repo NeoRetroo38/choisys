@@ -192,6 +192,8 @@ model Cube {
   name           String        @db.VarChar(120)
   /// Shown to people who open a shared link. Presentation only: changing it does not create a version.
   description    String?       @db.VarChar(600)
+  /// Archived cubes leave «Mis cubos» and their links close; nothing is deleted.
+  archivedAt     DateTime?     @map("archived_at") @db.Timestamptz(3)
   createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
   owner          Profile       @relation(fields: [ownerProfileId], references: [id], onDelete: Cascade, onUpdate: Cascade)

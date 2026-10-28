@@ -217,7 +217,20 @@ test('shared reference cube: owner publishes, people without an account answer, 
 
     // Mis cubos: open links and participants are counted; participant runs are not the owner's runs.
     const listed = (await call('/cubes', undefined, owner)).body.cubes.find((c: { cubeId: string }) => c.cubeId === cubeId);
-    assert.deepEqual([listed.runs, listed.openShares, listed.participants, listed.version], [1, 1, 4, 2]);
+    assert.deepEqual([listed.runs, listed.openShares, listed.participants, listed.version, listed.archived], [1, 1, 4, 2, false]);
+
+    // Archiving closes every open link and keeps every result; unarchiving does not reopen links. Only the owner.
+    assert.equal((await call(`/cubes/${cubeId}/archive`, { archived: true }, outsider)).status, 404);
+    assert.equal((await call(`/cubes/${cubeId}/archive`, { archived: 'yes' }, owner)).status, 400);
+    const archived = await call(`/cubes/${cubeId}/archive`, { archived: true }, owner);
+    assert.equal(archived.body.cube.archived, true);
+    assert.ok(archived.body.cube.shares.every((s: { open: boolean }) => !s.open));
+    assert.equal((await call(`/c/${second.body.share.token}/participants`, { displayName: 'Tarde' })).status, 409);
+    assert.equal((await call(`/cubes/${cubeId}/shares`, { referenceRunId }, owner)).status, 404, 'an archived cube publishes no new link');
+    const restored = await call(`/cubes/${cubeId}/archive`, { archived: false }, owner);
+    assert.equal(restored.body.cube.archived, false);
+    assert.ok(restored.body.cube.shares.every((s: { open: boolean }) => !s.open));
+    assert.equal((await view()).participants.length, 4);
   } finally {
     server.close();
     await db.account.deleteMany({ where: { email: { startsWith: tag } } });

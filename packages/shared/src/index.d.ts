@@ -119,9 +119,9 @@ export interface CubePhaseDefinition { label: string; rows: string[]; columns: s
 /** `description` (optional, up to 600 characters) is shown to people who open a shared link. */
 export interface CreateCubeRequest { name: string; phases: CubePhaseDefinition[]; description?: string }
 /** `openShares` > 0 means the cube is a published reference; `participants` counts people across all its links. */
-export interface CubeSummary { cubeId: string; name: string; version: number; phases: number; runs: number; createdAt: string; openShares: number; participants: number }
+export interface CubeSummary { cubeId: string; name: string; archived: boolean; version: number; phases: number; runs: number; createdAt: string; openShares: number; participants: number }
 export interface CubeRun extends RunSummary { hidden: boolean; version: number }
-export interface CubeDetail { cubeId: string; name: string; description: string | null; version: number; versionId: string; phases: CubePhaseDefinition[]; createdAt: string; runs: CubeRun[]; shares: CubeShareSummary[] }
+export interface CubeDetail { cubeId: string; name: string; description: string | null; archived: boolean; version: number; versionId: string; phases: CubePhaseDefinition[]; createdAt: string; runs: CubeRun[]; shares: CubeShareSummary[] }
 
 /** Cubos de referencia compartidos (Mis cubos → compartir). The similarity is computed by the C++ engine, never by a client. */
 export interface PhaseSimilarity { phase: number; similarity: number }
