@@ -20,6 +20,13 @@ cambiar la variable y publicar otra versión.
   la app**: guarda una copia.
 - En los PR se compila sin firmar (solo para comprobar que construye); no se publica nada.
 
+## Windows
+
+- Job `windows`: exporta la web de `apps/mobile` y la empaqueta con **Tauri 2** (`desktop/src-tauri`) en un
+  instalador NSIS `choisys-windows-setup.exe` (~10 MB). Es solo una ventana: no añade lógica.
+- Sin firmar: Windows SmartScreen avisará la primera vez (*Más información → Ejecutar de todas formas*).
+- La API del PC debe aceptar el origen de la app: añade `http://tauri.localhost` a `API_ALLOWED_ORIGINS`.
+
 ## Publicar una versión
 
 `publicar-version-choisys.command 0.1.0` en el Mac, o *Actions → Release → Run workflow* desde el móvil.
