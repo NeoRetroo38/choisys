@@ -3,7 +3,7 @@ import test from 'node:test';
 import { capabilitySet, navigationModel } from '../src/account/capabilities';
 import type { ShareParticipant } from '@scenarys/shared';
 import { readShareResponse } from '../src/account/accountApi';
-import { dimension, emptyDraft, fromCube, labels, toCube } from '../src/cubes/cubeForm';
+import { dimension, emptyDraft, fromCube, labels, toCube , cells, joinCells, shown } from '../src/cubes/cubeForm';
 import { createProductClient } from '../src/productApi';
 import { shareUrl } from '../src/shares/link';
 import { participantRows } from '../src/shares/participants';
@@ -87,4 +87,11 @@ test('el QR del enlace es un código cuadrado válido para la URL completa', asy
   const modules = toQR(`https://neowebdevsolutions.com/choisys/c/${'x'.repeat(43)}`);
   const side = Math.sqrt(modules.length);
   assert.ok(Number.isInteger(side) && side >= 21 && (side - 17) % 4 === 0, `lado ${side}`);
+});
+
+test('cell editing keeps positions and hides the type suffix', () => {
+  assert.deepEqual(cells('a, , c', 4), ['a', '', 'c', '']);
+  assert.equal(joinCells(['a', '', 'c'], 'col'), 'a, col2:string, c');
+  assert.deepEqual(labels(joinCells(['', 'Tranquilidad'], 'fila'), 2, 'fila'), ['fila1:string', 'Tranquilidad']);
+  assert.equal(shown('precio:string'), 'precio');
 });

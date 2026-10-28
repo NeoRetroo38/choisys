@@ -42,3 +42,15 @@ export function fromCube(cube: { name: string; description?: string | null; phas
     height: String(first?.rows.length ?? 3), rows: first?.rows.join(', ') ?? '',
   };
 }
+
+/** Label as people read it: the `:string` type suffix of the contract is hidden in the interface. */
+export const shown = (label: string) => label.replace(/:string$/, '');
+
+/** Per-cell editing: the label of each column/row as typed (empty = default), turned back into the stored form. */
+export function cells(semantics: string, size: number): string[] {
+  const given = semantics.split(',').map(item => item.trim());
+  return Array.from({ length: size }, (_, i) => given[i] ?? '');
+}
+export function joinCells(values: string[], base: string): string {
+  return values.map((value, i) => value.trim().replace(/,/g, ' ') || `${base}${i + 1}:string`).join(', ');
+}
