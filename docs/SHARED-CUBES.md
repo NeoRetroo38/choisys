@@ -20,18 +20,21 @@ app → API choisys (valida, autoriza, guarda) → 127.0.0.1:8765 neo-cube-servi
 - Los participantes juegan con la misma sesión y el mismo `/evaluate` que un cubo propio: la API fija la forma
   de la versión publicada y, al completar, guarda la run y pide la comparación.
 
-## Modelo de datos (migración `20261023000000_shared_cubes`, aditiva)
+## Modelo de datos (migración `20261023000000_shared_cubes`, solo crea tablas)
 
 | Tabla | Qué guarda |
 |---|---|
-| `cube_shares` | Enlace: versión del cubo (`cube_version_id`), run de referencia (`reference_run_id`), `token`, `closed_at` |
+| `cube_shares` | Enlace: versión del cubo (`cube_version_id`), run de referencia del dueño (`reference_run_id`), `token`, `closed_at` |
 | `cube_participants` | Persona sin cuenta: `display_name`, `email` opcional, `token_hash` (SHA-256; el token no se guarda) |
-| `cube_data` | Runs. Nuevo `participant_id`; `profile_id` admite NULL. CHECK: exactamente uno de los dos |
+| `cube_participant_runs` | Runs completadas de participantes: `output_data.measurements` tal como las dio el motor e `inference_data.comparison` |
 
-- La comparación se guarda en `cube_data.inference_data.comparison` = `{ referenceRunId, similarity, phases }`.
+- `cube_data` (runs de cuentas) no cambia. La migración solo crea tablas, índices y claves foráneas, que es lo único que
+  acepta la guarda de despliegue del PC (`deploy-database.mjs`, en daemon-core) sin revisión manual.
+- La comparación se guarda en `cube_participant_runs.inference_data.comparison` = `{ referenceRunId, similarity, phases }`.
   Los datos en bruto (`output_data.measurements`) quedan separados del derivado.
-- Cascadas: borrar la cuenta del dueño borra sus cubos, versiones, enlaces, participantes y sus runs. Borrar una
-  run de referencia deja el enlace y los participantes, sin comparación (`SET NULL`). Cerrar un enlace no borra nada.
+- Cascadas: borrar la cuenta del dueño borra sus cubos, versiones, enlaces, participantes y sus runs. Borrar un
+  participante borra sus runs. Borrar una run de referencia deja el enlace y los participantes, sin comparación
+  (`SET NULL`). Cerrar un enlace no borra nada.
 - Verificación sin servidor: `npm install --no-save @electric-sql/pglite && node apps/api/prisma/verify-shared-cubes-migration.mjs`.
 
 ## Versionado

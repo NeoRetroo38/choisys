@@ -11,7 +11,6 @@ import type { CubeComparer } from '../neoCubeClient.js';
 import type { SessionTarget } from '../sessionService.js';
 import { record } from '../validation.js';
 import { measurementsOf, uniformShape } from './cubeService.js';
-import { ENGINE_VERSION } from './runRecorder.js';
 
 const MAX_SHARES_PER_VERSION = 50;
 const MAX_PARTICIPANTS = 500;
@@ -113,7 +112,7 @@ export class ShareService {
         participants: {
           orderBy: { createdAt: 'asc' }, take: MAX_PARTICIPANTS,
           select: { id: true, displayName: true, email: true, createdAt: true,
-            runs: { where: { type: 'RUN', status: 'COMPLETED' }, orderBy: { createdAt: 'desc' }, take: MAX_RUNS_PER_PARTICIPANT,
+            runs: { orderBy: { createdAt: 'desc' }, take: MAX_RUNS_PER_PARTICIPANT,
               select: { id: true, createdAt: true, outputData: true, inferenceData: true } } },
         },
       },
@@ -178,8 +177,8 @@ export class ShareService {
   /** The participant's own runs. Never the reference, the similarity or anyone else. */
   async result(token: string, bearer: string): Promise<ParticipantResultResponse> {
     const person = await this.participant(token, bearer);
-    const runs = await this.db.cubeData.findMany({
-      where: { participantId: person.id, type: 'RUN', status: 'COMPLETED' }, orderBy: { createdAt: 'asc' }, take: MAX_RUNS_PER_PARTICIPANT,
+    const runs = await this.db.cubeParticipantRun.findMany({
+      where: { participantId: person.id }, orderBy: { createdAt: 'asc' }, take: MAX_RUNS_PER_PARTICIPANT,
       select: { id: true, createdAt: true, outputData: true },
     });
     return { ok: true, displayName: person.displayName, shape: uniformShape(person.share.cubeVersion.phases),
@@ -211,9 +210,8 @@ export class ShareService {
   /** Stores the engine's run first, then asks the engine for the comparison. A failed comparison is retried
    * from the owner's view; the run itself is never lost because of it. */
   private async recordRun(person: Participant, shape: CubeShape, measurements: Measurement[]): Promise<void> {
-    const run = await this.db.cubeData.create({
-      data: { participantId: person.id, type: 'RUN', status: 'COMPLETED', engineVersion: ENGINE_VERSION, scenarioVersion: 'custom',
-        cubeVersionId: person.share.cubeVersionId, outputData: { measurements: measurements.map(({ phase, row, column }) => ({ phase, row, column })) } },
+    const run = await this.db.cubeParticipantRun.create({
+      data: { participantId: person.id, cubeVersionId: person.share.cubeVersionId, outputData: { measurements: measurements.map(({ phase, row, column }) => ({ phase, row, column })) } },
       select: { id: true },
     });
     const { referenceRunId } = person.share;
@@ -224,7 +222,7 @@ export class ShareService {
     if (reference.length !== shape.phases || candidate.length !== shape.phases) return null;
     try {
       const comparison = await this.engine.compare(shape, reference, candidate);
-      await this.db.cubeData.update({ where: { id: runId }, data: { inferenceData: { comparison: { referenceRunId, similarity: comparison.similarity,
+      await this.db.cubeParticipantRun.update({ where: { id: runId }, data: { inferenceData: { comparison: { referenceRunId, similarity: comparison.similarity,
         phases: comparison.phases.map(({ phase, similarity }) => ({ phase, similarity })) } } } });
       return comparison;
     } catch {

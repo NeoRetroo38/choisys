@@ -107,8 +107,7 @@ export class CubeDataService {
         select: { id: true, type: true, profileId: true, status: true, engineVersion: true, scenarioVersion: true,
           profile: { select: { id: true, role: true } } },
       });
-      // Runs of shared-cube participants have no profile and are not reachable through account-scoped data.
-      if (!run || run.type !== 'RUN' || !run.profile) throw new PersistenceNotFoundError('Run not found.');
+      if (!run || run.type !== 'RUN') throw new PersistenceNotFoundError('Run not found.');
       if (!canWriteCubeData(actor, run.profile)) throw new AccessDeniedError('Session write denied.');
       if (!['CREATED', 'ACTIVE'].includes(run.status)) throw new PersistenceInputError('Run is no longer writable.');
       return tx.cubeData.create({
@@ -133,7 +132,7 @@ export class CubeDataService {
       where: { id: runId },
       include: { profile: { select: { id: true, role: true } }, sessions: { orderBy: { sessionIndex: 'asc' } } },
     });
-    if (!run || run.type !== 'RUN' || !run.profile) throw new PersistenceNotFoundError('Run not found.');
+    if (!run || run.type !== 'RUN') throw new PersistenceNotFoundError('Run not found.');
     if (!canReadCubeData(actor, { profileId: run.profile.id, profileRole: run.profile.role })) {
       throw new AccessDeniedError('Run access denied.');
     }
@@ -175,7 +174,7 @@ export class CubeDataService {
     const record = await this.db.cubeData.findUnique({
       where: { id }, select: { id: true, type: true, status: true, run: { select: { status: true } }, profile: { select: { id: true, role: true } } },
     });
-    if (!record || record.type !== expectedType || !record.profile) throw new PersistenceNotFoundError(`${expectedType} not found.`);
+    if (!record || record.type !== expectedType) throw new PersistenceNotFoundError(`${expectedType} not found.`);
     if (!canWriteCubeData(actor, record.profile)) throw new AccessDeniedError('Inference write denied.');
     if (!['CREATED', 'ACTIVE'].includes(record.status)) throw new PersistenceInputError(`${expectedType} is no longer writable.`);
     if (expectedType === 'SESSION' && (!record.run || !['CREATED', 'ACTIVE'].includes(record.run.status))) {

@@ -70,8 +70,7 @@ export class CubeService {
       where: { ownerProfileId: actor.profileId }, orderBy: { createdAt: 'desc' }, take: MAX_CUBES,
       select: { id: true, name: true, createdAt: true, archivedAt: true,
         versions: { orderBy: { version: 'desc' }, select: { version: true, phases: true,
-          // Solo las runs del dueño: las de participantes se cuentan aparte.
-          _count: { select: { runs: { where: { participantId: null } } } },
+          _count: { select: { runs: true } },
           shares: { select: { closedAt: true, _count: { select: { participants: true } } } } } } },
     });
     return { ok: true, cubes: rows.map(row => {
