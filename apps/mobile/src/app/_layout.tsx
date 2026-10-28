@@ -19,7 +19,7 @@ function AuthenticatedRoutes() {
       </>}
     </View>;
   }
-  return <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#ffffff' }, animation: 'fade' }}>
+  return <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#ffffff' }, animation: 'slide_from_right', gestureEnabled: true }}>
     <Stack.Protected guard={state.status === 'signedIn'}>
       <Stack.Screen name="index" /><Stack.Screen name="account" /><Stack.Screen name="system" />
       <Stack.Screen name="cubes" /><Stack.Screen name="cube-new" /><Stack.Screen name="cube" /><Stack.Screen name="play" /><Stack.Screen name="share" /><Stack.Screen name="cube-style" />

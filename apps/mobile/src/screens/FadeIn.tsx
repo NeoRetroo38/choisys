@@ -9,16 +9,18 @@ interface FadeInProps {
   offset?: number;
   /** Starting horizontal offset in px; eases to 0. */
   fromX?: number;
+  /** Wait before starting, in ms, to chain several blocks. */
+  delay?: number;
 }
 
 const native = Platform.OS !== 'web';
 
 /** Screen transition: fade and rise on mount. Remount with a `key` to replay it. */
-export default function FadeIn({ children, style, duration = 340, offset = 14, fromX = 0 }: FadeInProps) {
+export default function FadeIn({ children, style, duration = 340, offset = 14, fromX = 0, delay = 0 }: FadeInProps) {
   const [progress] = useState(() => new Animated.Value(0));
   useEffect(() => {
-    Animated.timing(progress, { toValue: 1, duration, easing: Easing.out(Easing.cubic), useNativeDriver: native }).start();
-  }, [duration, progress]);
+    Animated.timing(progress, { toValue: 1, duration, delay, easing: Easing.out(Easing.cubic), useNativeDriver: native }).start();
+  }, [delay, duration, progress]);
   return (
     <Animated.View style={[style, { opacity: progress, transform: [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [offset, 0] }) }, { translateX: progress.interpolate({ inputRange: [0, 1], outputRange: [fromX, 0] }) }] }]}>
       {children}
