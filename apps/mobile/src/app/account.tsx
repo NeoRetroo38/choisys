@@ -88,7 +88,7 @@ export default function Account() {
 
       {model.account.history && <Section label="tu cubo">
         {runs === null ? <EmptyState text="…" /> : completed.length === 0 ? <EmptyState text="Aún no has completado ningún Run." /> :
-          <View style={styles.cube}><CubeView runs={completed} size={Math.min(width - space.m * 2, 420)} />
+          <View style={styles.cube}><CubeView runs={completed} views size={Math.min(width - space.m * 2, 420)} />
             <RunsBar value={cubePrefs.runsShown} max={maxRunsShown} available={allCompleted.length} accent={cubePrefs.accent}
               onChange={runsShown => updateCubePrefs({ runsShown })} /></View>}
         {runs !== null && runs.length > 0 && <ActionRow label="Runs" value={String(runs.length)}
