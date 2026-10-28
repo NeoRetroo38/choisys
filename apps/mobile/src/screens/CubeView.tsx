@@ -2,7 +2,7 @@ import { createCubeEdges } from '@neoretroo38/neo-cube-web';
 import type { Vec3 } from '@neoretroo38/neo-cube-web';
 import type { CubeShape } from '@scenarys/shared';
 import { useEffect, useState } from 'react';
-import { AccessibilityInfo, PanResponder, Platform, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, PanResponder, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, G, Line, Polyline, Text as SvgText } from 'react-native-svg';
 import type { RunMeasurements } from '../history/runHistory';
 import FadeIn from './FadeIn';
@@ -16,7 +16,14 @@ interface CubeViewProps {
   shape?: CubeShape;
   /** Replaces the default «last N runs» line. */
   caption?: string;
+  /** Shows the view switcher (3D, front, side, top, by phase). Same data and drawing rules in every view. */
+  views?: boolean;
 }
+
+type ViewMode = '3d' | 'frente' | 'lado' | 'arriba' | 'fases';
+const modes: Array<{ id: ViewMode; label: string }> = [
+  { id: '3d', label: '3D' }, { id: 'frente', label: 'frente' }, { id: 'lado', label: 'lado' }, { id: 'arriba', label: 'arriba' }, { id: 'fases', label: 'fases' },
+];
 const VANILLA: CubeShape = { phases: 3, rows: 3, columns: 3 };
 
 // Experiment: axes in neon green; past Runs (lines and points) in red.
@@ -94,7 +101,8 @@ const drawMs = 900;
 function scaleVec(dir: Vec, amount: number): Vec { return [dir[0] * amount, dir[1] * amount, dir[2] * amount]; }
 
 /** Draws the received observations only: x = column, y = row, z = phase. Drag to rotate, tap to reset. */
-export default function CubeView({ runs, size, shape = VANILLA, caption }: CubeViewProps) {
+export default function CubeView({ runs, size, shape = VANILLA, caption, views = false }: CubeViewProps) {
+  const [mode, setMode] = useState<ViewMode>('3d');
   const [prefs] = useCubePrefs();
   const green = prefs.accent;
   const gridEdges = latticeEdges(shape);
@@ -120,13 +128,25 @@ export default function CubeView({ runs, size, shape = VANILLA, caption }: CubeV
   const xs = levels(shape.columns), ys = levels(shape.rows), zs = levels(shape.phases);
   const [view, setView] = useState(defaultView);
   // Gesture bookkeeping lives in one stable object that only the gesture handlers touch (no ref reads during render).
-  const [drag] = useState(() => ({ base: defaultView, current: defaultView, frame: 0 }));
+  const [drag] = useState(() => ({ base: defaultView, current: defaultView, frame: 0, glide: (_to: typeof defaultView) => {} }));
   const clampPitch = (pitch: number) => Math.max(-maxPitch, Math.min(maxPitch, pitch));
   // Stop the inertia animation when the view goes away.
   useEffect(() => () => { if (drag.frame) cancelAnimationFrame(drag.frame); }, [drag]);
   const [pan] = useState(() => {
     const update = (next: typeof defaultView) => { drag.current = next; setView(next); };
     const stop = () => { if (drag.frame) { cancelAnimationFrame(drag.frame); drag.frame = 0; } };
+    // Smoothly turn to a preset angle (front, side, top) along the shortest yaw.
+    drag.glide = (to) => {
+      stop();
+      const from = drag.current, start = Date.now();
+      const dyaw = Math.atan2(Math.sin(to.yaw - from.yaw), Math.cos(to.yaw - from.yaw));
+      const step = () => {
+        const t = Math.min(1, (Date.now() - start) / 520), e = 1 - Math.pow(1 - t, 3);
+        update({ yaw: from.yaw + dyaw * e, pitch: from.pitch + (to.pitch - from.pitch) * e });
+        drag.frame = t < 1 ? requestAnimationFrame(step) : 0;
+      };
+      drag.frame = requestAnimationFrame(step);
+    };
     const coast = (yawSpeed: number, pitchSpeed: number) => {
       const step = () => {
         yawSpeed *= inertiaDecay;
@@ -167,8 +187,51 @@ export default function CubeView({ runs, size, shape = VANILLA, caption }: CubeV
     zTip[0] - 9 * Math.cos(arrowAngle + side * 0.45), zTip[1] - 9 * Math.sin(arrowAngle + side * 0.45),
   ];
 
+  const presets: Record<Exclude<ViewMode, 'fases'>, typeof defaultView> = {
+    '3d': defaultView, frente: { yaw: 0, pitch: 0 }, lado: { yaw: -Math.PI / 2, pitch: 0 }, arriba: { yaw: 0, pitch: maxPitch },
+  };
+  const choose = (next: ViewMode) => { setMode(next); if (next !== 'fases') drag.glide(presets[next]); };
+  const switcher = views && <View style={styles.modes} accessibilityRole="tablist">
+    {modes.map(item => <Pressable key={item.id} accessibilityRole="tab" accessibilityState={{ selected: mode === item.id }}
+      onPress={() => choose(item.id)} style={[styles.mode, mode === item.id && { borderColor: green }]}>
+      <Text style={[styles.modeText, { color: mode === item.id ? green : '#8a8a8a' }]}>{item.label}</Text>
+    </Pressable>)}
+  </View>;
+
+  if (mode === 'fases') {
+    // Same observations, one grid per phase: x = column, y = row. Latest Run white, older ones red.
+    const cell = Math.min(34, (size - 48) / (Math.min(shape.phases, 3) * shape.columns + 2));
+    return <FadeIn duration={360} offset={0}>
+      {switcher}
+      <View style={styles.phases}>
+        {Array.from({ length: shape.phases }, (_, index) => {
+          const phase = index + 1;
+          return <View key={phase} style={styles.phaseCard}>
+            <Text style={[styles.phaseTag, { color: green }]}>{phaseLabel(prefs, phase)}</Text>
+            <Svg width={cell * shape.columns} height={cell * shape.rows}>
+              {Array.from({ length: shape.rows + 1 }, (_, r) => <Line key={`r${r}`} x1={0} y1={r * cell} x2={shape.columns * cell} y2={r * cell} stroke="#ffffff" strokeOpacity={0.35} />)}
+              {Array.from({ length: shape.columns + 1 }, (_, c) => <Line key={`k${c}`} x1={c * cell} y1={0} x2={c * cell} y2={shape.rows * cell} stroke="#ffffff" strokeOpacity={0.35} />)}
+              {runs.map((run, runIndex) => {
+                const item = run.find(m => m.phase === phase);
+                if (!item) return null;
+                const latest = runIndex === runs.length - 1;
+                const jitter = latest ? 0 : ((runIndex % 3) - 1) * cell * 0.16;
+                return <Circle key={runIndex} cx={(item.column - 0.5) * cell + jitter} cy={(item.row - 0.5) * cell + jitter}
+                  r={latest ? cell * 0.2 : cell * 0.12} fill={latest ? '#ffffff' : red} fillOpacity={latest ? 1 : 0.55} />;
+              })}
+            </Svg>
+            <Text style={styles.phaseFoot}>fase {phase}</Text>
+          </View>;
+        })}
+      </View>
+      <Text style={[styles.caption, { color: green }]}>{caption ?? (runs.length === 0 ? 'no runs yet' : `last ${runs.length} ${runs.length === 1 ? 'run' : 'runs'}`)}</Text>
+      <Text style={styles.hint}>columna → · fila ↓ · una cuadrícula por fase</Text>
+    </FadeIn>;
+  }
+
   return (
     <FadeIn duration={520} offset={0}>
+      {switcher}
       <View accessible accessibilityLabel={`Cubo con ${runs.length} ${runs.length === 1 ? 'intento' : 'intentos'} recientes. Arrastra para rotarlo.`}
         {...pan.panHandlers} style={Platform.OS === 'web' ? ({ cursor: 'grab', touchAction: 'none', userSelect: 'none' } as object) : undefined}>
         <Svg width={size} height={size}>
@@ -232,5 +295,12 @@ export default function CubeView({ runs, size, shape = VANILLA, caption }: CubeV
 
 const styles = StyleSheet.create({
   caption: { fontFamily: mono, fontSize: 13, textAlign: 'center', marginTop: 8 },
+  modes: { flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', gap: 6, paddingTop: 10, paddingBottom: 4 },
+  mode: { borderWidth: 1, borderColor: '#333333', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5 },
+  modeText: { fontFamily: mono, fontSize: 12 },
+  phases: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 14, paddingVertical: 18, paddingHorizontal: 8 },
+  phaseCard: { alignItems: 'center', gap: 6 },
+  phaseTag: { fontFamily: mono, fontSize: 14 },
+  phaseFoot: { fontFamily: mono, fontSize: 11, color: '#8a8a8a' },
   hint: { color: '#8a8a8a', fontFamily: mono, fontSize: 11, textAlign: 'center', marginTop: 6 },
 });
