@@ -7,7 +7,7 @@ import { useAccount } from '../account/AccountProvider';
 import { errorMessage } from '../api/request';
 import CubeView from '../screens/CubeView';
 import { linkFor } from '../shares/linkFor';
-import { participantRows, type ParticipantFilter, type ParticipantOrder } from '../shares/participants';
+import { participantRows, toggleSelection, type ParticipantFilter, type ParticipantOrder } from '../shares/participants';
 import ActionRow from '../ui/ActionRow';
 import EmptyState from '../ui/EmptyState';
 import QrCode from '../ui/QrCode';
@@ -51,6 +51,28 @@ function Comparison({ share, person, shape }: { share: CubeShareDetail; person: 
   </View>;
 }
 
+/** Two participants side by side: each one's cube and the engine's similarity to the reference, per phase. */
+function Pair({ people, shape }: { people: ShareParticipant[]; shape: CubeShape }) {
+  const { width } = useWindowDimensions();
+  const size = Math.min(Math.max(Math.floor((Math.min(width, 560) - space.m * 3) / 2), 150), 260);
+  const phases = Array.from({ length: shape.phases }, (_, i) => i + 1);
+  const at = (person: ShareParticipant, phase: number) => person.runs[0]?.comparison?.phases.find(p => p.phase === phase)?.similarity;
+  return <View style={styles.night}>
+    <View style={styles.pair}>
+      {people.map(person => <View key={person.participantId} style={styles.side}>
+        <Text style={styles.nightLabel}>{person.displayName}</Text>
+        {person.runs[0] ? <CubeView runs={person.runs.slice().reverse().map(run => run.measurements)} shape={shape} size={size}
+          caption={person.runs[0].comparison ? percent(person.runs[0].comparison.similarity) : 'sin comparación'} />
+          : <Text style={styles.nightCopy}>Aún no ha completado ninguna run.</Text>}
+      </View>)}
+    </View>
+    <Text style={styles.nightCopy}>similitud de la última run de cada uno con el cubo de referencia</Text>
+    {phases.map(phase => <Text key={phase} style={styles.phase}>
+      fase {phase} · {people.map(person => { const value = at(person, phase); return value === undefined ? '–' : percent(value); }).join('  ·  ')}
+    </Text>)}
+  </View>;
+}
+
 /** One link of a reference cube: copy it, close it, and see who answered, ranked by the engine's similarity. */
 export default function Share() {
   const { api, model } = useAccount();
@@ -62,7 +84,8 @@ export default function Share() {
   const [busy, setBusy] = useState(false);
   const [order, setOrder] = useState<ParticipantOrder>('similarity');
   const [filter, setFilter] = useState<ParticipantFilter>('all');
-  const [open, setOpen] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string[]>([]);
+  const toggle = (id: string) => setSelected(current => toggleSelection(current, id));
   const back = () => router.canGoBack() ? router.back() : router.replace({ pathname: '/cube', params: { id: cube ?? '' } });
   useFocusEffect(useCallback(() => {
     if (!model.cubes || !cube || !id) return;
@@ -103,17 +126,20 @@ export default function Share() {
         <Text style={styles.note}>Similitud con el cubo de referencia: proximidad dentro de la cuadrícula de este cubo, calculada por el Cubo de Neo. No mide a la persona; la decisión es tuya.</Text>
         <Choice value={order} onChange={setOrder} options={[['similarity', 'similitud'], ['date', 'fecha'], ['name', 'nombre']]} />
         <Choice value={filter} onChange={setFilter} options={[['all', 'todos'], ['completed', 'completados'], ['pending', 'sin completar']]} />
+        {selected.length === 2 && <Pair shape={shape}
+          people={selected.map(id => share.participants.find(p => p.participantId === id)).filter((p): p is ShareParticipant => !!p)} />}
+        {share.participants.length > 1 && <Text style={styles.note}>Toca uno para verlo junto a la referencia; toca otro para comparar a los dos.</Text>}
         {share.participants.length === 0 ? <EmptyState text="Aún no ha entrado nadie con este enlace." /> :
           rows.length === 0 ? <EmptyState text="Nadie en este filtro." /> :
           rows.map(person => {
             const latest = person.runs[0];
             return <View key={person.participantId}>
-              <ActionRow label={`${person.rank ?? '–'}  ${person.displayName}`}
+              <ActionRow label={`${selected.includes(person.participantId) ? '● ' : ''}${person.rank ?? '–'}  ${person.displayName}`}
                 detail={[person.email, latest ? when(latest.completedAt) : `entró ${when(person.joinedAt)}`].filter(Boolean).join(' · ')}
                 value={!latest ? 'sin completar' : latest.comparison ? percent(latest.comparison.similarity) : 'pendiente'}
-                accessibilityHint="Muestra su cubo junto al de referencia"
-                onPress={() => setOpen(current => current === person.participantId ? null : person.participantId)} />
-              {open === person.participantId && <Comparison share={share} person={person} shape={shape} />}
+                accessibilityHint={selected.includes(person.participantId) ? 'Quita la selección' : 'Lo selecciona para comparar'}
+                onPress={() => toggle(person.participantId)} />
+              {selected.length === 1 && selected[0] === person.participantId && <Comparison share={share} person={person} shape={shape} />}
             </View>;
           })}
       </Section>
