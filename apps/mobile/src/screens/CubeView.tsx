@@ -6,7 +6,7 @@ import { AccessibilityInfo, PanResponder, Platform, StyleSheet, Text, View } fro
 import Svg, { Circle, G, Line, Polyline, Text as SvgText } from 'react-native-svg';
 import type { RunMeasurements } from '../history/runHistory';
 import FadeIn from './FadeIn';
-import { accents, phaseLabel } from '../cube/cubePrefs';
+import { phaseLabel } from '../cube/cubePrefs';
 import { useCubePrefs } from '../cube/useCubePrefs';
 
 interface CubeViewProps {
@@ -96,7 +96,7 @@ function scaleVec(dir: Vec, amount: number): Vec { return [dir[0] * amount, dir[
 /** Draws the received observations only: x = column, y = row, z = phase. Drag to rotate, tap to reset. */
 export default function CubeView({ runs, size, shape = VANILLA, caption }: CubeViewProps) {
   const [prefs] = useCubePrefs();
-  const green = accents[prefs.accent];
+  const green = prefs.accent;
   const gridEdges = latticeEdges(shape);
   // The latest Run draws itself point by point when it changes (instant if the user asked for less motion).
   const latestKey = JSON.stringify(runs[runs.length - 1] ?? []);
